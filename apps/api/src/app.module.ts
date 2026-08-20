@@ -4,6 +4,9 @@ import { HealthModule } from './health/health.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { MeModule } from './me/me.module.js';
 import { AccessControlModule } from './access-control/access-control.module.js';
+import { NodesModule } from './nodes/nodes.module.js';
 
-@Module({ imports: [PrismaModule, HealthModule, AuthModule, MeModule, AccessControlModule] })
+@Module({
+  imports: [PrismaModule, HealthModule, AuthModule, MeModule, AccessControlModule, NodesModule],
+})
 export class AppModule {}

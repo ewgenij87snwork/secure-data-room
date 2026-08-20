@@ -64,4 +64,5 @@ export type NodeKind = z.infer<typeof nodeKindSchema>;
 export type AccessRole = z.infer<typeof accessRoleSchema>;
 export type NodeSummary = z.infer<typeof nodeSummarySchema>;
 export type ListNodesResponse = z.infer<typeof listNodesResponseSchema>;
+export type CreateFolderRequest = z.infer<typeof createFolderRequestSchema>;
 export type DeleteImpact = z.infer<typeof deleteImpactSchema>;

@@ -47,3 +47,4 @@ jobs:
       - run: pnpm verify
         env:
           ACCESS_POLICY_TEST_DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/secure_data_room_test
+          NODE_TEST_DATABASE_URL: postgresql://ci:ci@127.0.0.1:5432/secure_data_room_test
