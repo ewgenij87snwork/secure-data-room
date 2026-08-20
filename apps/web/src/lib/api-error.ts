@@ -34,6 +34,7 @@ export function mapApiError(
       safeMessages[parsed.data.error.code] ?? 'The request could not be completed.',
       response.status,
       parsed.data.error.requestId,
+      parsed.data.error.details,
     );
   }
 
