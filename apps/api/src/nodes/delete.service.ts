@@ -169,8 +169,21 @@ function internalDeleteError(message: string): ApiException {
 }
 
 function isSerializationConflict(error: unknown): boolean {
-  if (typeof error !== 'object' || error === null) return false;
-  if ('code' in error && error.code === 'P2034') return true;
-  if (!('meta' in error) || typeof error.meta !== 'object' || error.meta === null) return false;
-  return 'code' in error.meta && error.meta.code === '40001';
+  const prismaError = asRecord(error);
+  if (prismaError === null) return false;
+  if (prismaError.code === 'P2034') return true;
+
+  const meta = asRecord(prismaError.meta);
+  if (meta === null) return false;
+  if (meta.code === '40001') return true;
+
+  const adapterError = asRecord(meta.driverAdapterError);
+  const cause = asRecord(adapterError?.cause);
+  return cause?.kind === 'TransactionWriteConflict' || cause?.originalCode === '40001';
+}
+
+function asRecord(value: unknown): Readonly<Record<string, unknown>> | null {
+  return typeof value === 'object' && value !== null
+    ? (value as Readonly<Record<string, unknown>>)
+    : null;
 }

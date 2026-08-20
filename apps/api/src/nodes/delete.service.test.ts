@@ -142,4 +142,33 @@ describe('DeleteService', () => {
     });
     expect(h.database.$transaction).toHaveBeenCalledTimes(2);
   });
+
+  it('retries the raw-query adapter shape used for a PostgreSQL write conflict', async () => {
+    const h = harness();
+    h.database.$transaction
+      .mockRejectedValueOnce(
+        Object.assign(new Error('raw query failed'), {
+          code: 'P2010',
+          meta: {
+            driverAdapterError: {
+              name: 'DriverAdapterError',
+              cause: { kind: 'TransactionWriteConflict' },
+            },
+          },
+        }),
+      )
+      .mockImplementationOnce((callback: (value: typeof h.transaction) => Promise<unknown>) =>
+        callback(h.transaction),
+      );
+    const service = new DeleteService(h.database as never, h.policy as never);
+
+    await expect(service.deleteNode(principal, nodeId)).resolves.toEqual({
+      rootNodeId: nodeId,
+      folderCount: 1,
+      fileCount: 2,
+      totalBytes: '42',
+      activeShareCount: 3,
+    });
+    expect(h.database.$transaction).toHaveBeenCalledTimes(2);
+  });
 });
