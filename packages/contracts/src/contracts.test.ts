@@ -6,6 +6,7 @@ import {
   byteCountSchema,
   nodeNameSchema,
   prepareUploadRequestSchema,
+  listNodeChildrenResponseSchema,
 } from './index.js';
 
 const validBootstrapResponse = {
@@ -84,5 +85,14 @@ describe('shared contracts', () => {
   it('keeps error codes stable and machine-readable', () => {
     expect(apiErrorCodeSchema.parse('NAME_CONFLICT')).toBe('NAME_CONFLICT');
     expect(() => apiErrorCodeSchema.parse('Something went wrong')).toThrow();
+  });
+
+  it('parses the narrow children response', () => {
+    expect(
+      listNodeChildrenResponseSchema.parse({
+        items: [],
+        pageInfo: { nextCursor: null, hasNextPage: false },
+      }),
+    ).toEqual({ items: [], pageInfo: { nextCursor: null, hasNextPage: false } });
   });
 });
