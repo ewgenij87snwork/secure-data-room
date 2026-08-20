@@ -27,6 +27,7 @@
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:seed": "prisma db seed",
+    "prisma:invariants:check": "psql \"$DIRECT_URL\" -X -v ON_ERROR_STOP=1 -f prisma/tests/foundation-invariants.sql",
     "architecture:check": "node scripts/check-architecture.mjs",
     "placeholders:check": "node scripts/check-placeholders.mjs",
     "requirements:check": "node scripts/check-requirements.mjs",
