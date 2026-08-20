@@ -9,6 +9,15 @@ import {
   listNodeChildrenResponseSchema,
   nodeBreadcrumbsResponseSchema,
   preparedUploadSchema,
+  createPermissionedShareRequestSchema,
+  createPermissionedShareResponseSchema,
+  createPublicShareRequestSchema,
+  createPublicShareResponseSchema,
+  listSharesResponseSchema,
+  revokeShareResponseSchema,
+  sharedWithMeResponseSchema,
+  publicShareTokenHeaderSchema,
+  publicShareNodeResponseSchema,
 } from './index.js';
 
 const validBootstrapResponse = {
@@ -131,5 +140,106 @@ describe('shared contracts', () => {
     ).toEqual({
       items: [{ id: '550e8400-e29b-41d4-a716-446655440000', name: 'Legal' }],
     });
+  });
+
+  it('freezes sharing request and response shapes without placing tokens in payloads', () => {
+    const id = '550e8400-e29b-41d4-a716-446655440000';
+    const canonicalToken = `${'a'.repeat(42)}g`;
+    const share = {
+      id,
+      targetNodeId: id,
+      targetName: 'Contracts',
+      principalType: 'USER' as const,
+      role: 'VIEWER' as const,
+      recipientEmail: 'reviewer@example.com',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      revokedAt: null,
+    };
+
+    expect(createPermissionedShareRequestSchema.parse({ email: ' Reviewer@Example.com ' })).toEqual(
+      {
+        email: 'reviewer@example.com',
+        role: 'VIEWER',
+      },
+    );
+    expect(createPermissionedShareResponseSchema.parse(share)).toEqual(share);
+    expect(createPublicShareRequestSchema.parse({})).toEqual({});
+    expect(() => createPublicShareRequestSchema.parse({ token: 'a'.repeat(43) })).toThrow();
+    expect(listSharesResponseSchema.parse({ items: [share] })).toEqual({ items: [share] });
+    expect(revokeShareResponseSchema.parse({ shareId: id, revoked: true })).toEqual({
+      shareId: id,
+      revoked: true,
+    });
+    expect(
+      createPublicShareResponseSchema.parse({
+        shareId: id,
+        url: `https://room.example/share#token=${canonicalToken}`,
+        targetName: 'Contracts',
+      }),
+    ).toHaveProperty('url');
+    expect(() =>
+      createPublicShareResponseSchema.parse({
+        shareId: id,
+        url: 'https://room.example/share?token=raw-token',
+        targetName: 'Contracts',
+      }),
+    ).toThrow();
+    expect(canonicalToken).toHaveLength(43);
+    expect(() => publicShareTokenHeaderSchema.parse(canonicalToken)).not.toThrow();
+    expect(() => publicShareTokenHeaderSchema.parse('a'.repeat(42))).toThrow();
+    expect(() => publicShareTokenHeaderSchema.parse('a'.repeat(44))).toThrow();
+    expect(() => publicShareTokenHeaderSchema.parse('a'.repeat(43))).toThrow();
+    expect(() => publicShareTokenHeaderSchema.parse(`${'a'.repeat(42)}+`)).toThrow();
+    expect(() =>
+      createPermissionedShareRequestSchema.parse({ email: 'a@b.test', token: 'raw-token' }),
+    ).toThrow();
+  });
+
+  it('freezes shared-with-me keyset pages and read-only public node access', () => {
+    const id = '550e8400-e29b-41d4-a716-446655440000';
+    const item = {
+      share: {
+        id,
+        targetNodeId: id,
+        targetName: 'Contracts',
+        principalType: 'USER' as const,
+        role: 'VIEWER' as const,
+        recipientEmail: 'reviewer@example.com',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        revokedAt: null,
+      },
+      node: {
+        id,
+        dataRoomId: id,
+        parentId: null,
+        kind: 'FOLDER' as const,
+        name: 'Contracts',
+        sizeBytes: null,
+        mimeType: null,
+        revision: 1,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        isShared: true,
+        accessRole: 'VIEWER' as const,
+      },
+      owner: {
+        id: '550e8400-e29b-41d4-a716-446655440002',
+        email: 'owner@example.com',
+        displayName: 'Owner',
+      },
+    };
+    expect(
+      sharedWithMeResponseSchema.parse({
+        items: [item],
+        pageInfo: { nextCursor: null, hasNextPage: false },
+      }),
+    ).toEqual({
+      items: [item],
+      pageInfo: { nextCursor: null, hasNextPage: false },
+    });
+    expect(publicShareNodeResponseSchema.parse(item.node)).toEqual(item.node);
+    expect(() =>
+      publicShareNodeResponseSchema.parse({ ...item.node, accessRole: 'EDITOR' }),
+    ).toThrow();
   });
 });
