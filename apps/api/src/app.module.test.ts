@@ -11,6 +11,7 @@ import { authenticatedPrincipal, type AuthenticatedPrincipal } from './auth/prin
 import { PrismaService } from './database/prisma.service.js';
 import { MeService } from './me/me.service.js';
 import { AccessPolicyService } from './access-control/access-policy.service.js';
+import { RuntimeControlsService } from './runtime-controls/runtime-controls.service.js';
 
 const principal = authenticatedPrincipal(
   '11111111-1111-4111-8111-111111111111',
@@ -27,6 +28,13 @@ const bootstrapResponse: BootstrapResponse = {
     name: 'My Data Room',
     rootNodeId: '33333333-3333-4333-8333-333333333333',
     createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  runtime: {
+    registrationOpen: true,
+    uploadsEnabled: false,
+    publicLinksEnabled: false,
+    maintenanceMode: false,
+    updatedAt: '2026-01-01T00:00:00.000Z',
   },
 };
 
@@ -61,6 +69,7 @@ describe('AppModule identity bootstrap', () => {
       .compile();
 
     expect(moduleRef.get(AccessPolicyService)).toBeInstanceOf(AccessPolicyService);
+    expect(moduleRef.get(RuntimeControlsService)).toBeInstanceOf(RuntimeControlsService);
 
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('v1');

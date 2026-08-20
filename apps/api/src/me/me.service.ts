@@ -8,19 +8,15 @@ import type { BootstrapResponse } from '@data-room/contracts';
 import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../database/prisma.service.js';
 import type { AuthenticatedPrincipal } from '../auth/principal.js';
+import {
+  RuntimeControlsService,
+  type RuntimeControlsTransaction,
+} from '../runtime-controls/runtime-controls.service.js';
 
 const DEFAULT_ROOM_NAME = 'My Data Room';
 const MAX_TRANSACTION_ATTEMPTS = 3;
 
-export interface BootstrapTransaction {
-  runtimeControl: {
-    upsert(args: {
-      where: { id: number };
-      create: { id: number };
-      update: Record<string, never>;
-      select: { registrationOpen: true };
-    }): Promise<{ registrationOpen: boolean }>;
-  };
+export interface BootstrapTransaction extends RuntimeControlsTransaction {
   userProfile: {
     findUnique(args: { where: { id: string } }): Promise<{
       id: string;
@@ -113,6 +109,7 @@ function toBootstrapResponse(
   user: { id: string; email: string; displayName: string | null },
   room: { id: string; name: string; createdAt: Date },
   root: { id: string },
+  runtime: BootstrapResponse['runtime'],
 ): BootstrapResponse {
   return {
     user: { id: user.id, email: user.email, displayName: user.displayName },
@@ -122,6 +119,7 @@ function toBootstrapResponse(
       rootNodeId: root.id,
       createdAt: room.createdAt.toISOString(),
     },
+    runtime,
   };
 }
 
@@ -130,6 +128,7 @@ export class MeService {
   constructor(
     @Inject(PrismaService)
     private readonly prisma: BootstrapDatabase,
+    private readonly runtimeControls: RuntimeControlsService,
   ) {}
 
   async bootstrap(principal: AuthenticatedPrincipal): Promise<BootstrapResponse> {
@@ -151,15 +150,10 @@ export class MeService {
 
     return this.prisma.$transaction(
       async (tx) => {
-        const runtimeControl = await tx.runtimeControl.upsert({
-          where: { id: 1 },
-          create: { id: 1 },
-          update: {},
-          select: { registrationOpen: true },
-        });
+        const runtime = await this.runtimeControls.read(tx);
         const existingUser = await tx.userProfile.findUnique({ where: { id: principal.userId } });
 
-        if (!existingUser && !runtimeControl.registrationOpen) throw registrationClosed();
+        if (!existingUser && !runtime.registrationOpen) throw registrationClosed();
 
         const user = await tx.userProfile.upsert({
           where: { id: principal.userId },
@@ -201,7 +195,7 @@ export class MeService {
           });
         }
 
-        return toBootstrapResponse(user, room, root);
+        return toBootstrapResponse(user, room, root, runtime);
       },
       { isolationLevel: 'Serializable' },
     );
@@ -214,6 +208,7 @@ export class MeService {
     const email = principal.email.trim().toLowerCase();
     return this.prisma.$transaction(
       async (tx) => {
+        const runtime = await this.runtimeControls.read(tx);
         const user = await tx.userProfile.findUnique({ where: { id: principal.userId } });
         if (user?.email.trim().toLowerCase() !== email) throw lastConflict;
 
@@ -234,7 +229,7 @@ export class MeService {
           },
           data: { recipientUserId: user.id },
         });
-        return toBootstrapResponse(user, room, root);
+        return toBootstrapResponse(user, room, root, runtime);
       },
       { isolationLevel: 'Serializable' },
     );

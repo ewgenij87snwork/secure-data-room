@@ -2,12 +2,49 @@ import { describe, expect, it } from 'vitest';
 import {
   MAX_PDF_BYTES,
   apiErrorCodeSchema,
+  bootstrapResponseSchema,
   byteCountSchema,
   nodeNameSchema,
   prepareUploadRequestSchema,
 } from './index.js';
 
+const validBootstrapResponse = {
+  user: {
+    id: '550e8400-e29b-41d4-a716-446655440000',
+    email: 'owner@example.com',
+    displayName: null,
+  },
+  room: {
+    id: '650e8400-e29b-41d4-a716-446655440000',
+    name: 'Room',
+    rootNodeId: '750e8400-e29b-41d4-a716-446655440000',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  },
+  runtime: {
+    registrationOpen: false,
+    uploadsEnabled: false,
+    publicLinksEnabled: true,
+    maintenanceMode: false,
+    updatedAt: '2026-01-01T00:00:00.000+02:00',
+  },
+};
+
 describe('shared contracts', () => {
+  it('accepts the exact runtime snapshot', () => {
+    expect(bootstrapResponseSchema.parse(validBootstrapResponse)).toEqual(validBootstrapResponse);
+  });
+
+  it('rejects an invalid runtime updatedAt value', () => {
+    const result = bootstrapResponseSchema.safeParse({
+      ...validBootstrapResponse,
+      runtime: {
+        ...validBootstrapResponse.runtime,
+        updatedAt: 'not-a-date',
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('normalizes user-visible names once at the boundary', () => {
     expect(nodeNameSchema.parse('  Ｌｅｇａｌ  ')).toBe('Legal');
   });
