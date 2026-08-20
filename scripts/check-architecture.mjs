@@ -53,6 +53,25 @@ if (/model DataRoom\s*\{[^}]*\brootNodeId\b/u.test(schema)) {
 if (!/model RuntimeControl/u.test(schema)) failures.push('RuntimeControl model is missing.');
 if (!/tokenHash\s+Bytes/u.test(schema)) failures.push('Public share token hash field is missing.');
 
+let migrationFiles = [];
+try {
+  migrationFiles = (await walk(join(rootPath, 'prisma', 'migrations'))).filter((file) =>
+    file.endsWith('migration.sql'),
+  );
+} catch (error) {
+  if (error?.code !== 'ENOENT') throw error;
+}
+
+const providerSchemaReference = /(?:\b(?:auth|storage)|"(?:auth|storage)")\s*\./iu;
+const providerSchemaDefinition =
+  /\b(?:CREATE|ALTER|DROP)\s+SCHEMA(?:\s+IF\s+(?:NOT\s+)?EXISTS)?\s+"?(?:auth|storage)"?\b/iu;
+for (const file of migrationFiles) {
+  const migration = await readFile(file, 'utf8');
+  if (providerSchemaReference.test(migration) || providerSchemaDefinition.test(migration)) {
+    failures.push(`${relative(rootPath, file)} modifies a provider-owned schema.`);
+  }
+}
+
 const appFiles = (await walk(join(rootPath, 'apps'))).filter((file) =>
   ['.ts', '.tsx'].includes(extname(file)),
 );

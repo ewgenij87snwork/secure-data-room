@@ -6,10 +6,6 @@ DO $foundation_structure$
 DECLARE
   protected_table_count INTEGER;
 BEGIN
-  IF to_regnamespace('auth') IS NOT NULL OR to_regnamespace('storage') IS NOT NULL THEN
-    RAISE EXCEPTION 'foundation migration must not create provider-owned schemas';
-  END IF;
-
   SELECT count(*)
   INTO protected_table_count
   FROM pg_class AS relation

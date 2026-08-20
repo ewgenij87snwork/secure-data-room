@@ -45,3 +45,45 @@ test('ignores server-only service-role references when the repository path conta
     await rm(fixtureRoot, { recursive: true, force: true });
   }
 });
+
+test('rejects migrations that modify provider-owned schemas', async () => {
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'architecture-check-'));
+  const repositoryRoot = join(fixtureRoot, 'repository');
+
+  try {
+    const fixtureFiles = new Map([
+      ['package.json', '{"name":"architecture-fixture","private":true,"type":"module"}\n'],
+      ['.env.example', 'PUBLIC_URL=\n'],
+      [
+        'prisma/schema.prisma',
+        'model RuntimeControl { id String @id }\nmodel PublicShare { id String @id\n tokenHash Bytes }\n',
+      ],
+      [
+        'prisma/migrations/001_bad/migration.sql',
+        'CREATE TABLE auth.application_owned (id uuid PRIMARY KEY);\n',
+      ],
+      ['apps/api/src/env.ts', "export const surface = 'server';\n"],
+      ['apps/web/src/browser.ts', "export const surface = 'browser';\n"],
+    ]);
+
+    for (const [path, contents] of fixtureFiles) {
+      const absolutePath = join(repositoryRoot, path);
+      await mkdir(dirname(absolutePath), { recursive: true });
+      await writeFile(absolutePath, contents, 'utf8');
+    }
+
+    const fixtureCheckPath = join(repositoryRoot, 'scripts', 'check-architecture.mjs');
+    await mkdir(dirname(fixtureCheckPath), { recursive: true });
+    await copyFile(architectureCheckPath, fixtureCheckPath);
+
+    const result = spawnSync(process.execPath, ['scripts/check-architecture.mjs'], {
+      cwd: repositoryRoot,
+      encoding: 'utf8',
+    });
+
+    assert.equal(result.status, 1, result.stdout);
+    assert.match(result.stderr, /provider-owned schema/u);
+  } finally {
+    await rm(fixtureRoot, { recursive: true, force: true });
+  }
+});
