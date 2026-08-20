@@ -95,6 +95,40 @@ describe('data room API boundary', () => {
     expect(requestMethod(fetchMock, 3)).toBe('DELETE');
   });
 
+  it('posts the shared positive-revision move contract to the file endpoints', async () => {
+    const moved = {
+      ...node,
+      kind: 'FILE',
+      parentId: parentId,
+      mimeType: 'application/pdf',
+      sizeBytes: '10',
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(moved))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          url: 'https://storage.example.test/signed',
+          expiresAt: '2026-01-01T01:00:00.000Z',
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const { moveNode, readFileViewUrl } = await import('./data-room-api.js');
+
+    await moveNode('access-token', nodeId, { targetFolderId: parentId, expectedRevision: 1 });
+    await readFileViewUrl('access-token', nodeId);
+
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+      `https://api.example.test/v1/files/${nodeId}/move`,
+    );
+    expect(requestMethod(fetchMock, 0)).toBe('POST');
+    expect(requestBody(fetchMock, 0)).toEqual({ targetFolderId: parentId, expectedRevision: 1 });
+    expect(String(fetchMock.mock.calls[1]?.[0])).toBe(
+      `https://api.example.test/v1/files/${nodeId}/view-url`,
+    );
+    expect(requestMethod(fetchMock, 1)).toBe('POST');
+  });
+
   it('keeps credentials out of stable query keys', async () => {
     const { nodeKeys } = await import('./data-room-keys.js');
     expect(nodeKeys.children(nodeId)).toEqual(['nodes', 'children', nodeId]);

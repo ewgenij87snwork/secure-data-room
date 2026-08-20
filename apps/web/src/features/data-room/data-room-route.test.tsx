@@ -116,6 +116,32 @@ describe('DataRoomRoute', () => {
     expect(screen.queryByRole('button', { name: /Actions for Contracts/ })).not.toBeInTheDocument();
   });
 
+  it('passes the mounted folder id as the move tree current target', async () => {
+    const current = node({ id: folderId, parentId: rootId, name: 'Contracts' });
+    const file = node({
+      id: fileId,
+      parentId: folderId,
+      kind: 'FILE',
+      name: 'Board minutes.pdf',
+      sizeBytes: '1048576',
+      mimeType: 'application/pdf',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => routeResponse(input, current, [file])),
+    );
+
+    await renderRoute(`/workspace/${folderId}`);
+
+    const table = await screen.findByRole('table');
+    await userEvent.click(
+      within(table).getByRole('button', { name: 'Actions for Board minutes.pdf' }),
+    );
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Move' }));
+
+    expect(await screen.findByRole('button', { name: `Collapse ${folderId}` })).toBeVisible();
+  });
+
   it.each([
     [
       'owner with uploads enabled',
@@ -149,14 +175,17 @@ describe('DataRoomRoute', () => {
         'fetch',
         vi.fn((input: RequestInfo | URL) => routeResponse(input, current, [])),
       );
-      await renderRoute({ ...bootstrap, runtime: { ...bootstrap.runtime, ...runtime } });
+      await renderRoute(undefined, { ...bootstrap, runtime: { ...bootstrap.runtime, ...runtime } });
       if (visible) expect(await screen.findByLabelText('Choose PDF files')).toBeVisible();
       else expect(screen.queryByLabelText('Choose PDF files')).not.toBeInTheDocument();
     },
   );
 });
 
-async function renderRoute(routeBootstrap = bootstrap): Promise<ReturnType<typeof render>> {
+async function renderRoute(
+  initialEntry = `/workspace/${rootId}`,
+  routeBootstrap = bootstrap,
+): Promise<ReturnType<typeof render>> {
   const { DataRoomRoute } = await dataRoomRouteModule;
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -164,7 +193,7 @@ async function renderRoute(routeBootstrap = bootstrap): Promise<ReturnType<typeo
   return render(
     <QueryClientProvider client={queryClient}>
       <AuthContext.Provider value={authenticated}>
-        <MemoryRouter initialEntries={[`/workspace/${rootId}`]}>
+        <MemoryRouter initialEntries={[initialEntry]}>
           <Routes>
             <Route element={<Outlet context={{ bootstrap: routeBootstrap }} />}>
               <Route path="/workspace/:nodeId" element={<DataRoomRoute />} />
@@ -182,10 +211,10 @@ function routeResponse(
   children: NodeSummary[],
 ): Promise<Response> {
   const url = requestUrl(input);
-  if (url.pathname.endsWith(`/nodes/${rootId}/breadcrumbs`)) {
-    return Promise.resolve(jsonResponse({ items: [{ id: rootId, name: current.name }] }));
+  if (url.pathname.endsWith(`/nodes/${current.id}/breadcrumbs`)) {
+    return Promise.resolve(jsonResponse({ items: [{ id: current.id, name: current.name }] }));
   }
-  if (url.pathname.endsWith(`/nodes/${rootId}/children`)) {
+  if (url.pathname.endsWith(`/nodes/${current.id}/children`)) {
     return Promise.resolve(
       jsonResponse({ items: children, pageInfo: { nextCursor: null, hasNextPage: false } }),
     );

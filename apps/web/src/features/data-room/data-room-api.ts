@@ -3,11 +3,12 @@ import {
   deleteImpactSchema,
   finalizeUploadRequestSchema,
   finalizeUploadResponseSchema,
-  prepareUploadRequestSchema,
-  prepareUploadResponseSchema,
   listNodeChildrenResponseSchema,
   nodeBreadcrumbsResponseSchema,
   nodeSummarySchema,
+  moveFileRequestSchema,
+  prepareUploadRequestSchema,
+  prepareUploadResponseSchema,
   renameNodeRequestSchema,
   type CreateFolderRequest,
   type DeleteImpact,
@@ -19,7 +20,11 @@ import {
   type PreparedUpload,
   type FinalizeUploadResponse,
 } from '@data-room/contracts';
+import { z } from 'zod';
 import { apiRequest } from '../../lib/api-client.js';
+
+const viewUrlResponseSchema = z.object({ url: z.string().url(), expiresAt: z.string().datetime() });
+type MoveFileRequest = z.infer<typeof moveFileRequestSchema>;
 
 export async function readNode(accessToken: string, nodeId: string): Promise<NodeSummary> {
   const response = await apiRequest<unknown>(`/nodes/${nodeId}`, { accessToken });
@@ -83,6 +88,30 @@ export async function deleteNode(accessToken: string, nodeId: string): Promise<D
     accessToken,
   });
   return deleteImpactSchema.parse(response);
+}
+
+export async function moveNode(
+  accessToken: string,
+  nodeId: string,
+  input: MoveFileRequest,
+): Promise<NodeSummary> {
+  const response = await apiRequest<unknown>(`/files/${nodeId}/move`, {
+    method: 'POST',
+    accessToken,
+    body: JSON.stringify(moveFileRequestSchema.parse(input)),
+  });
+  return nodeSummarySchema.parse(response);
+}
+
+export async function readFileViewUrl(
+  accessToken: string,
+  nodeId: string,
+): Promise<{ url: string; expiresAt: string }> {
+  const response = await apiRequest<unknown>(`/files/${nodeId}/view-url`, {
+    method: 'POST',
+    accessToken,
+  });
+  return viewUrlResponseSchema.parse(response);
 }
 
 export async function prepareUploads(

@@ -8,10 +8,12 @@ export function NodeTable({
   items,
   onRename,
   onDelete,
+  onMove,
 }: Readonly<{
   items: readonly NodeItemViewModel[];
   onRename: (node: NodeSummary, returnFocusElement: HTMLElement | null) => void;
   onDelete: (node: NodeSummary, returnFocusElement: HTMLElement | null) => void;
+  onMove: ((node: NodeSummary, returnFocusElement: HTMLElement | null) => void) | undefined;
 }>): React.JSX.Element {
   return (
     <div className="node-table-wrap">
@@ -39,7 +41,12 @@ export function NodeTable({
               </td>
               <td>{item.sizeLabel}</td>
               <td className="node-table__actions">
-                <NodeActionsMenu item={item} onRename={onRename} onDelete={onDelete} />
+                <NodeActionsMenu
+                  item={item}
+                  onRename={onRename}
+                  onDelete={onDelete}
+                  onMove={onMove}
+                />
               </td>
             </tr>
           ))}

@@ -8,6 +8,7 @@ import {
   readDeleteImpact,
   readNode,
   readNodeChildren,
+  moveNode,
   renameNode,
 } from './data-room-api.js';
 import { nodeKeys } from './data-room-keys.js';
@@ -78,6 +79,27 @@ export function useRenameNode() {
         node.parentId
           ? queryClient.invalidateQueries({ queryKey: nodeKeys.children(node.parentId) })
           : Promise.resolve(),
+      ]);
+    },
+  });
+}
+
+export function useMoveNode() {
+  const { accessToken } = useAuth();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ node, targetFolderId }: { node: NodeSummary; targetFolderId: string }) =>
+      moveNode(requireAccessToken(accessToken), node.id, {
+        targetFolderId,
+        expectedRevision: node.revision,
+      }),
+    onSuccess: async (moved, { node }) => {
+      queryClient.setQueryData(nodeKeys.detail(moved.id), moved);
+      await Promise.all([
+        node.parentId
+          ? queryClient.invalidateQueries({ queryKey: nodeKeys.children(node.parentId) })
+          : Promise.resolve(),
+        queryClient.invalidateQueries({ queryKey: nodeKeys.children(moved.parentId ?? '') }),
       ]);
     },
   });

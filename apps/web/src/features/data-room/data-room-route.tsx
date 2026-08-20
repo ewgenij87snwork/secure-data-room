@@ -10,6 +10,7 @@ import { FolderAccessPanel } from './components/folder-access-panel.js';
 import { FolderToolbar } from './components/folder-toolbar.js';
 import { NodeBrowser } from './components/node-browser.js';
 import { RenameNodeDialog } from './components/rename-node-dialog.js';
+import { MoveFileDialog } from './components/move-file-dialog.js';
 import { WorkspaceHeader } from './components/workspace-header.js';
 import { WorkspaceShell } from './components/workspace-shell.js';
 import { WorkspaceSidebar } from './components/workspace-sidebar.js';
@@ -38,6 +39,7 @@ export function DataRoomRoute(): React.JSX.Element {
   const [createReturnFocus, setCreateReturnFocus] = useState<HTMLButtonElement | null>(null);
   const [renameTarget, setRenameTarget] = useState<SelectedNode | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SelectedNode | null>(null);
+  const [moveTarget, setMoveTarget] = useState<SelectedNode | null>(null);
   const accountLabel = bootstrap.user.displayName ?? bootstrap.user.email;
   const currentNode = nodeQuery.data;
   const canManage = currentNode?.accessRole === 'OWNER' && !bootstrap.runtime.maintenanceMode;
@@ -125,6 +127,7 @@ export function DataRoomRoute(): React.JSX.Element {
             onLoadMore={() => void childrenQuery.fetchNextPage()}
             onRename={(node, returnFocusElement) => setRenameTarget({ node, returnFocusElement })}
             onDelete={(node, returnFocusElement) => setDeleteTarget({ node, returnFocusElement })}
+            onMove={(node, returnFocusElement) => setMoveTarget({ node, returnFocusElement })}
           />
         ) : (
           <section className="document-summary" aria-label="Document summary">
@@ -173,6 +176,18 @@ export function DataRoomRoute(): React.JSX.Element {
           }}
           node={deleteTarget.node}
           returnFocusElement={deleteTarget.returnFocusElement}
+        />
+      ) : null}
+      {moveTarget ? (
+        <MoveFileDialog
+          key={`${moveTarget.node.id}:${moveTarget.node.revision}`}
+          open
+          onOpenChange={(open) => {
+            if (!open) setMoveTarget(null);
+          }}
+          node={moveTarget.node}
+          currentFolderId={currentNode.id}
+          returnFocusElement={moveTarget.returnFocusElement}
         />
       ) : null}
     </>,
