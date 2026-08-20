@@ -58,13 +58,9 @@ describe('private PDF viewer', () => {
     );
     expect(screen.queryByLabelText('PDF document: A.pdf')).not.toBeInTheDocument();
 
-    second.resolve(
-      json({ url: 'https://storage.example.test/b', expiresAt: '2026-08-20T20:00:00.000Z' }),
-    );
+    second.resolve(signedUrl('https://storage.example.test/b'));
     await waitFor(() => expect(screen.getByLabelText('PDF document: B.pdf')).toBeInTheDocument());
-    first.resolve(
-      json({ url: 'https://storage.example.test/a', expiresAt: '2026-08-20T20:00:00.000Z' }),
-    );
+    first.resolve(signedUrl('https://storage.example.test/a'));
     await waitFor(() =>
       expect(screen.queryByLabelText('PDF document: A.pdf')).not.toBeInTheDocument(),
     );
@@ -81,9 +77,7 @@ describe('private PDF viewer', () => {
       if (url.pathname.endsWith(`/nodes/${fileAId}`))
         return Promise.resolve(json(node(fileAId, 'A.pdf')));
       if (url.pathname.endsWith(`/files/${fileAId}/view-url`)) {
-        return Promise.resolve(
-          json({ url: 'https://storage.example.test/a', expiresAt: '2026-08-20T20:00:00.000Z' }),
-        );
+        return Promise.resolve(signedUrl('https://storage.example.test/a'));
       }
       return Promise.resolve(
         new Response(
@@ -200,6 +194,10 @@ function node(id: string, name: string) {
 
 function json(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200 });
+}
+
+function signedUrl(url: string): Response {
+  return json({ url, expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString() });
 }
 
 function requestUrl(input: RequestInfo | URL): URL {

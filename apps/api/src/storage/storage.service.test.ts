@@ -97,4 +97,31 @@ describe('SupabaseStorageService', () => {
       apikey: serviceRoleKey,
     });
   });
+
+  it('never sends a new secret API key as an Authorization bearer token', async () => {
+    const secretApiKey = 'sb_secret_test';
+    const fetchImpl = vi
+      .fn<(input: string, init?: RequestInit) => Promise<Response>>()
+      .mockResolvedValue(new Response(Uint8Array.from([37, 80, 68, 70, 45]), { status: 206 }));
+    const service = new SupabaseStorageService(
+      { storage: { from: () => ({}) } } as never,
+      {
+        SUPABASE_URL: 'https://project.supabase.co',
+        STORAGE_BUCKET: 'data-room-pdfs',
+        SUPABASE_SERVICE_ROLE_KEY: secretApiKey,
+      },
+      fetchImpl,
+    );
+
+    await expect(service.readPrefix('rooms/r/objects/o', 5)).resolves.toEqual(
+      Uint8Array.from([37, 80, 68, 70, 45]),
+    );
+
+    const fetchCall = fetchImpl.mock.calls[0];
+    if (!fetchCall?.[1]) throw new Error('Expected storage fetch request options.');
+    expect(fetchCall[1].headers).toEqual({
+      Range: 'bytes=0-4',
+      apikey: secretApiKey,
+    });
+  });
 });

@@ -62,8 +62,10 @@ export class SupabaseStorageService extends StorageService {
         Range: `bytes=0-${byteCount - 1}`,
         ...(this.config.SUPABASE_SERVICE_ROLE_KEY
           ? {
-              Authorization: `Bearer ${this.config.SUPABASE_SERVICE_ROLE_KEY}`,
               apikey: this.config.SUPABASE_SERVICE_ROLE_KEY,
+              ...(this.config.SUPABASE_SERVICE_ROLE_KEY.startsWith('sb_secret_')
+                ? {}
+                : { Authorization: `Bearer ${this.config.SUPABASE_SERVICE_ROLE_KEY}` }),
             }
           : {}),
       },
