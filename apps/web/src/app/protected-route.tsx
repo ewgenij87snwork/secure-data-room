@@ -76,5 +76,14 @@ export function ProtectedRoute(): React.JSX.Element {
   if (!bootstrap.isSuccess) {
     return <WorkspaceSkeleton />;
   }
-  return <Outlet />;
+  return (
+    <>
+      {bootstrap.data.runtime.maintenanceMode ? (
+        <div className="maintenance-notice" role="status" aria-live="polite">
+          Maintenance mode is active. Read-only access remains available.
+        </div>
+      ) : null}
+      <Outlet />
+    </>
+  );
 }

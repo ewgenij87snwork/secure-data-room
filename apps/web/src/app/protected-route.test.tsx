@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthContext, type AuthContextValue } from '../features/auth/auth-context.js';
+import type { BootstrapResponse } from '@data-room/contracts';
 
 vi.stubEnv('VITE_API_BASE_URL', 'https://api.example.test/v1/');
 vi.stubEnv('VITE_SUPABASE_URL', 'https://project.supabase.co');
@@ -47,10 +48,54 @@ async function renderProtected(auth: AuthContextValue) {
   );
 }
 
+function bootstrapResponse(maintenanceMode: boolean): Response {
+  const body: BootstrapResponse = {
+    user: {
+      id: '550e8400-e29b-41d4-a716-446655440000',
+      email: 'owner@example.com',
+      displayName: null,
+    },
+    room: {
+      id: '650e8400-e29b-41d4-a716-446655440000',
+      name: 'Room',
+      rootNodeId: '750e8400-e29b-41d4-a716-446655440000',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    },
+    runtime: {
+      registrationOpen: true,
+      uploadsEnabled: false,
+      publicLinksEnabled: false,
+      maintenanceMode,
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    },
+  };
+  return new Response(JSON.stringify(body), { status: 200 });
+}
+
 describe('ProtectedRoute', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it('keeps the private workspace rendered with a persistent maintenance notice', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(bootstrapResponse(true)));
+    await renderProtected(authenticated);
+    const notice = await screen.findByText(
+      'Maintenance mode is active. Read-only access remains available.',
+    );
+    expect(notice).toHaveRole('status');
+    expect(notice).toHaveAttribute('aria-live', 'polite');
+    expect(screen.getByRole('heading', { name: 'Private workspace' })).toBeVisible();
+  });
+
+  it('does not render a maintenance notice in normal mode', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(bootstrapResponse(false)));
+    await renderProtected(authenticated);
+    expect(await screen.findByRole('heading', { name: 'Private workspace' })).toBeVisible();
+    expect(
+      screen.queryByText('Maintenance mode is active. Read-only access remains available.'),
+    ).not.toBeInTheDocument();
   });
 
   it('preserves the intended route when redirecting an anonymous visitor', async () => {

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { BootstrapResponse } from '@data-room/contracts';
 import { authenticatedPrincipal } from '../auth/principal.js';
 import { MeService, type BootstrapDatabase, type BootstrapTransaction } from './me.service.js';
+import { RuntimeControlsService } from '../runtime-controls/runtime-controls.service.js';
 
 const userId = '11111111-1111-4111-8111-111111111111';
 const roomId = '22222222-2222-4222-8222-222222222222';
@@ -14,8 +15,16 @@ interface BootstrapState {
   root: { id: string; name: string } | null;
 }
 
+interface RuntimeRow {
+  registrationOpen: boolean;
+  uploadsEnabled: boolean;
+  publicLinksEnabled: boolean;
+  maintenanceMode: boolean;
+  updatedAt: Date;
+}
+
 interface HarnessOptions {
-  registrationOpen?: boolean;
+  runtime?: Partial<RuntimeRow>;
   state?: Partial<BootstrapState>;
   stateAfterFailures?: BootstrapState;
   transactionFailures?: string[];
@@ -33,7 +42,12 @@ function createHarness(options: HarnessOptions = {}) {
     ...options.state,
   };
   const runtimeUpsert = vi.fn().mockResolvedValue({
-    registrationOpen: options.registrationOpen ?? true,
+    registrationOpen: false,
+    uploadsEnabled: false,
+    publicLinksEnabled: false,
+    maintenanceMode: false,
+    updatedAt: createdAt,
+    ...options.runtime,
   });
   const userFind = vi.fn().mockImplementation(() => Promise.resolve(state.user));
   const userUpsert = vi.fn().mockImplementation(({ create, update }: UserUpsertArgs) => {
@@ -115,8 +129,8 @@ function existingState(): BootstrapState {
 
 describe('MeService bootstrap', () => {
   it('converges concurrent calls on one profile, room, and root', async () => {
-    const harness = createHarness();
-    const service = new MeService(harness.database);
+    const harness = createHarness({ runtime: { registrationOpen: true } });
+    const service = new MeService(harness.database, new RuntimeControlsService());
     const principal = authenticatedPrincipal(userId, ' Owner@Example.COM ');
 
     const [first, second] = await Promise.all([
@@ -136,8 +150,8 @@ describe('MeService bootstrap', () => {
   });
 
   it('binds normalized pending shares and refreshes the verified profile email atomically', async () => {
-    const harness = createHarness({ state: existingState() });
-    const service = new MeService(harness.database);
+    const harness = createHarness({ runtime: { registrationOpen: true }, state: existingState() });
+    const service = new MeService(harness.database, new RuntimeControlsService());
 
     const response = await service.bootstrap(
       authenticatedPrincipal(userId, ' Updated@Example.COM '),
@@ -150,6 +164,13 @@ describe('MeService bootstrap', () => {
         name: 'My Data Room',
         rootNodeId: rootId,
         createdAt: createdAt.toISOString(),
+      },
+      runtime: {
+        registrationOpen: true,
+        uploadsEnabled: false,
+        publicLinksEnabled: false,
+        maintenanceMode: false,
+        updatedAt: createdAt.toISOString(),
       },
     });
     expect(harness.userUpsert).toHaveBeenCalledWith({
@@ -172,8 +193,11 @@ describe('MeService bootstrap', () => {
   });
 
   it('retries serialization and unique conflicts at most twice', async () => {
-    const harness = createHarness({ transactionFailures: ['P2034', 'P2002'] });
-    const service = new MeService(harness.database);
+    const harness = createHarness({
+      runtime: { registrationOpen: true },
+      transactionFailures: ['P2034', 'P2002'],
+    });
+    const service = new MeService(harness.database, new RuntimeControlsService());
 
     await expect(
       service.bootstrap(authenticatedPrincipal(userId, 'owner@example.com')),
@@ -184,8 +208,11 @@ describe('MeService bootstrap', () => {
   });
 
   it('does not retry an unrelated database failure', async () => {
-    const harness = createHarness({ transactionFailures: ['P2025'] });
-    const service = new MeService(harness.database);
+    const harness = createHarness({
+      runtime: { registrationOpen: true },
+      transactionFailures: ['P2025'],
+    });
+    const service = new MeService(harness.database, new RuntimeControlsService());
 
     await expect(
       service.bootstrap(authenticatedPrincipal(userId, 'owner@example.com')),
@@ -195,16 +222,30 @@ describe('MeService bootstrap', () => {
 
   it('re-reads the committed profile, room, and root after exhausting conflict retries', async () => {
     const harness = createHarness({
+      runtime: {
+        registrationOpen: false,
+        uploadsEnabled: true,
+        publicLinksEnabled: true,
+        maintenanceMode: true,
+        updatedAt: new Date('2026-02-02T03:04:05.000Z'),
+      },
       transactionFailures: ['P2034', 'P2034', 'P2034'],
       stateAfterFailures: existingState(),
     });
-    const service = new MeService(harness.database);
+    const service = new MeService(harness.database, new RuntimeControlsService());
 
     await expect(
       service.bootstrap(authenticatedPrincipal(userId, 'owner@example.com')),
     ).resolves.toMatchObject({
       user: { id: userId },
       room: { id: roomId, rootNodeId: rootId },
+      runtime: {
+        registrationOpen: false,
+        uploadsEnabled: true,
+        publicLinksEnabled: true,
+        maintenanceMode: true,
+        updatedAt: '2026-02-02T03:04:05.000Z',
+      },
     });
     expect(harness.transaction).toHaveBeenCalledTimes(4);
     expect(harness.roomCreate).not.toHaveBeenCalled();
@@ -212,26 +253,44 @@ describe('MeService bootstrap', () => {
   });
 
   it('rejects new profiles while registration is closed but permits existing profiles', async () => {
-    const closedNew = createHarness({ registrationOpen: false });
-    const newService = new MeService(closedNew.database);
+    const closedRuntime = {
+      registrationOpen: false,
+      uploadsEnabled: false,
+      publicLinksEnabled: false,
+      maintenanceMode: false,
+      updatedAt: createdAt,
+    };
+    const closedNew = createHarness({ runtime: closedRuntime });
+    const newService = new MeService(closedNew.database, new RuntimeControlsService());
 
     await expect(
       newService.bootstrap(authenticatedPrincipal(userId, 'new@example.com')),
     ).rejects.toMatchObject({ response: { error: { code: 'REGISTRATION_CLOSED' } } });
     expect(closedNew.userUpsert).not.toHaveBeenCalled();
+    expect(closedNew.roomCreate).not.toHaveBeenCalled();
+    expect(closedNew.rootCreate).not.toHaveBeenCalled();
 
-    const closedExisting = createHarness({ registrationOpen: false, state: existingState() });
-    const existingService = new MeService(closedExisting.database);
+    const closedExisting = createHarness({ runtime: closedRuntime, state: existingState() });
+    const existingService = new MeService(closedExisting.database, new RuntimeControlsService());
     await expect(
       existingService.bootstrap(authenticatedPrincipal(userId, 'owner@example.com')),
-    ).resolves.toMatchObject({ user: { id: userId } });
+    ).resolves.toMatchObject({
+      user: { id: userId },
+      runtime: {
+        registrationOpen: false,
+        uploadsEnabled: false,
+        publicLinksEnabled: false,
+        maintenanceMode: false,
+        updatedAt: createdAt.toISOString(),
+      },
+    });
   });
 
   it('fails closed when an existing room has no root', async () => {
     const state = existingState();
     state.root = null;
     const harness = createHarness({ state });
-    const service = new MeService(harness.database);
+    const service = new MeService(harness.database, new RuntimeControlsService());
 
     await expect(
       service.bootstrap(authenticatedPrincipal(userId, 'owner@example.com')),
