@@ -12,6 +12,7 @@ import { PrismaService } from './database/prisma.service.js';
 import { MeService } from './me/me.service.js';
 import { AccessPolicyService } from './access-control/access-policy.service.js';
 import { RuntimeControlsService } from './runtime-controls/runtime-controls.service.js';
+import { NodesService } from './nodes/nodes.service.js';
 
 const principal = authenticatedPrincipal(
   '11111111-1111-4111-8111-111111111111',
@@ -70,6 +71,7 @@ describe('AppModule identity bootstrap', () => {
 
     expect(moduleRef.get(AccessPolicyService)).toBeInstanceOf(AccessPolicyService);
     expect(moduleRef.get(RuntimeControlsService)).toBeInstanceOf(RuntimeControlsService);
+    expect(moduleRef.get(NodesService)).toBeInstanceOf(NodesService);
 
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('v1');
