@@ -2,6 +2,20 @@ import { describe, expect, it, vi } from 'vitest';
 import { SupabaseStorageService } from './supabase-storage.service.js';
 
 describe('SupabaseStorageService', () => {
+  it('removes objects in batches of at most 100', async () => {
+    const remove = vi.fn().mockResolvedValue({ error: null });
+    const service = new SupabaseStorageService({ storage: { from: () => ({ remove }) } } as never, {
+      SUPABASE_URL: 'https://project.supabase.co',
+      STORAGE_BUCKET: 'data-room-pdfs',
+    });
+
+    await service.remove(Array.from({ length: 201 }, (_, index) => `object-${index}`));
+
+    expect(remove).toHaveBeenCalledTimes(3);
+    const calls = remove.mock.calls as unknown as [readonly string[]][];
+    expect(calls.map(([keys]) => keys.length)).toEqual([100, 100, 1]);
+  });
+
   it('creates a non-upsert signed upload capability and derives the TUS endpoint', async () => {
     const createSignedUploadUrl = vi.fn().mockResolvedValue({
       data: { token: 'capability-token' },

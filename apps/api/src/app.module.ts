@@ -6,6 +6,7 @@ import { MeModule } from './me/me.module.js';
 import { AccessControlModule } from './access-control/access-control.module.js';
 import { NodesModule } from './nodes/nodes.module.js';
 import { UploadsModule } from './uploads/uploads.module.js';
+import { CleanupModule } from './cleanup/cleanup.module.js';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { UploadsModule } from './uploads/uploads.module.js';
     AccessControlModule,
     NodesModule,
     UploadsModule,
+    CleanupModule,
   ],
 })
 export class AppModule {}

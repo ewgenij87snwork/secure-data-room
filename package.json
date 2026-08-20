@@ -46,6 +46,7 @@
     "ops:lockdown": "tsx scripts/runtime-control.ts lockdown",
     "ops:maintenance:on": "tsx scripts/runtime-control.ts maintenance-on",
     "ops:maintenance:off": "tsx scripts/runtime-control.ts maintenance-off",
+    "ops:cleanup-deleted": "tsx apps/api/src/cleanup/cleanup.command.ts",
     "worktrees:capabilities": "bash scripts/create-capabilities-worktree.sh",
     "git:check": "git diff --check && test -z \"$(git status --porcelain --untracked-files=no)\""
   },
