@@ -3,6 +3,7 @@ import { relative, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const repositoryRoot = fileURLToPath(new URL('..', import.meta.url));
+// Vite owns this checked-in declaration. Every additional generated declaration needs an explicit review.
 const allowedGeneratedPaths = new Set(['apps/web/src/vite-env.d.ts']);
 const generatedArtifactPattern = /(?:\.js(?:\.map)?|\.d\.ts(?:\.map)?|\.tsbuildinfo)$/u;
 const skippedDirectories = new Set(['.vite', 'dist', 'node_modules']);
