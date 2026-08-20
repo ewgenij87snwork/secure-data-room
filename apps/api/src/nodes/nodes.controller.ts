@@ -12,6 +12,7 @@ import type { AuthenticatedPrincipal } from '../auth/principal.js';
 import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { NodesService } from './nodes.service.js';
 import { NodesListService } from './nodes-list.service.js';
+import { NodesReadService } from './nodes-read.service.js';
 
 @Controller()
 @UseGuards(JwtAuthGuard)
@@ -19,6 +20,7 @@ export class NodesController {
   constructor(
     private readonly nodesService: NodesService,
     private readonly nodesListService: NodesListService,
+    private readonly nodesReadService: NodesReadService,
   ) {}
 
   @Post('folders')
@@ -36,5 +38,21 @@ export class NodesController {
     @Query(new ZodValidationPipe(paginationQuerySchema)) query: PaginationQuery,
   ) {
     return this.nodesListService.listChildren(principal, nodeId, query);
+  }
+
+  @Get('nodes/:nodeId')
+  getNode(
+    @Principal() principal: AuthenticatedPrincipal,
+    @Param('nodeId', new ZodValidationPipe(uuidSchema)) nodeId: string,
+  ) {
+    return this.nodesReadService.getNode(principal, nodeId);
+  }
+
+  @Get('nodes/:nodeId/breadcrumbs')
+  getBreadcrumbs(
+    @Principal() principal: AuthenticatedPrincipal,
+    @Param('nodeId', new ZodValidationPipe(uuidSchema)) nodeId: string,
+  ) {
+    return this.nodesReadService.getBreadcrumbs(principal, nodeId);
   }
 }

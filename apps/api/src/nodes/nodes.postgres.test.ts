@@ -2,12 +2,17 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { Client, Pool } from 'pg';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { listNodeChildrenResponseSchema, nodeSummarySchema } from '@data-room/contracts';
+import {
+  listNodeChildrenResponseSchema,
+  nodeBreadcrumbsResponseSchema,
+  nodeSummarySchema,
+} from '@data-room/contracts';
 import { authenticatedPrincipal } from '../auth/principal.js';
 import { AccessPolicyService } from '../access-control/access-policy.service.js';
 import { RuntimeControlsService } from '../runtime-controls/runtime-controls.service.js';
 import { NodesListService } from './nodes-list.service.js';
 import { NodesService } from './nodes.service.js';
+import { NodesReadService } from './nodes-read.service.js';
 
 const databaseUrl = process.env.NODE_TEST_DATABASE_URL;
 const run = databaseUrl ? describe : describe.skip;
@@ -18,6 +23,16 @@ const ids = {
   child: '44444444-4444-4444-8444-444444444444',
   file: '55555555-5555-4555-8555-555555555555',
   unrelated: '66666666-6666-4666-8666-666666666666',
+  viewer: '12121212-1212-4121-8121-121212121212',
+  legal: '13131313-1313-4131-8131-131313131313',
+  contracts: '14141414-1414-4141-8141-141414141414',
+  agreement: '15151515-1515-4151-8151-151515151515',
+  sibling: '16161616-1616-4161-8161-161616161616',
+  share: '17171717-1717-4171-8171-171717171717',
+  tombstonedAncestor: '18181818-1818-4181-8181-181818181818',
+  tombstonedDescendant: '19191919-1919-4191-8191-191919191919',
+  deletedTarget: '20202020-2020-4202-8202-202020202020',
+  missingTarget: '21212121-2121-4212-8212-212121212121',
   pageParent: '77777777-7777-4777-8777-777777777777',
   otherParent: '88888888-8888-4888-8888-888888888888',
   beforeCursor: '99999999-9999-4999-8999-999999999999',
@@ -30,6 +45,7 @@ const ids = {
 };
 const schema = `nodes_${process.pid}_${Date.now()}`;
 const owner = authenticatedPrincipal(ids.owner, 'owner@example.com');
+const viewer = authenticatedPrincipal(ids.viewer, 'viewer@example.com');
 
 run('NodesService PostgreSQL integration', () => {
   let admin: Client | undefined;
@@ -37,6 +53,7 @@ run('NodesService PostgreSQL integration', () => {
   let prisma: PrismaClient | undefined;
   let service: NodesService | undefined;
   let listService: NodesListService | undefined;
+  let readService: NodesReadService | undefined;
 
   beforeAll(async () => {
     const connectionString = requireDatabaseUrl();
@@ -58,7 +75,8 @@ run('NodesService PostgreSQL integration', () => {
       CREATE TABLE "Share" (
         "id" uuid PRIMARY KEY, "targetNodeId" uuid NOT NULL, "grantedByUserId" uuid NOT NULL,
         "principalType" "SharePrincipalType" NOT NULL, "role" "ShareRole" NOT NULL,
-        "recipientUserId" uuid, "recipientEmail" text, "revokedAt" timestamptz
+        "recipientUserId" uuid, "recipientEmail" text, "tokenHash" bytea,
+        "createdAt" timestamptz NOT NULL DEFAULT now(), "revokedAt" timestamptz
       );
       CREATE TABLE "RuntimeControl" (
         "id" integer PRIMARY KEY DEFAULT 1, "registrationOpen" boolean NOT NULL DEFAULT false,
@@ -82,6 +100,10 @@ run('NodesService PostgreSQL integration', () => {
     await admin.query('INSERT INTO "UserProfile" ("id", "email") VALUES ($1, $2)', [
       ids.unrelated,
       'unrelated@example.com',
+    ]);
+    await admin.query('INSERT INTO "UserProfile" ("id", "email") VALUES ($1, $2)', [
+      ids.viewer,
+      'viewer@example.com',
     ]);
     await admin.query('INSERT INTO "DataRoom" ("id", "ownerId", "name") VALUES ($1, $2, $3)', [
       ids.room,
@@ -118,10 +140,12 @@ run('NodesService PostgreSQL integration', () => {
     const accessPolicy = new AccessPolicyService(prisma);
     service = new NodesService(prisma, accessPolicy, new RuntimeControlsService());
     listService = new NodesListService(prisma, accessPolicy);
+    readService = new NodesReadService(prisma, accessPolicy);
   });
 
   beforeEach(async () => {
     const database = requirePrisma(prisma);
+    await database.share.deleteMany({});
     await database.runtimeControl.update({
       where: { id: 1 },
       data: { maintenanceMode: false },
@@ -129,6 +153,7 @@ run('NodesService PostgreSQL integration', () => {
     await database.node.deleteMany({
       where: { id: { notIn: [ids.root, ids.child, ids.file] } },
     });
+    await database.dataRoom.deleteMany({ where: { id: ids.foreignRoom } });
   });
 
   afterAll(async () => {
@@ -198,6 +223,133 @@ run('NodesService PostgreSQL integration', () => {
       response: { error: { code: 'ACCESS_DENIED' } },
     });
     await expectAttemptAbsent(database, ids.root, 'Unrelated attempt');
+  });
+
+  it('proves owner and viewer reads stay inside the authorized breadcrumb root', async () => {
+    const database = requirePrisma(prisma);
+    const reader = requireReadService(readService);
+    await seedReadTree(database);
+    await database.share.create({
+      data: {
+        id: ids.share,
+        targetNodeId: ids.legal,
+        grantedByUserId: ids.owner,
+        principalType: 'USER',
+        role: 'VIEWER',
+        recipientUserId: ids.viewer,
+      },
+    });
+    const observedIds = [ids.root, ids.legal, ids.contracts, ids.agreement];
+    const before = await database.node.findMany({
+      where: { id: { in: observedIds } },
+      select: { id: true, revision: true, updatedAt: true },
+    });
+
+    for (const nodeId of observedIds) {
+      expect(nodeSummarySchema.parse(await reader.getNode(owner, nodeId))).toMatchObject({
+        id: nodeId,
+        dataRoomId: ids.room,
+        accessRole: 'OWNER',
+        isShared: false,
+      });
+    }
+    expect(nodeSummarySchema.parse(await reader.getNode(owner, ids.agreement))).toMatchObject({
+      parentId: ids.contracts,
+      kind: 'FILE',
+      name: 'Agreement.pdf',
+      sizeBytes: '1',
+      mimeType: 'application/pdf',
+      revision: 1,
+    });
+    expect(
+      nodeBreadcrumbsResponseSchema
+        .parse(await reader.getBreadcrumbs(owner, ids.agreement))
+        .items.map(({ name }) => name),
+    ).toEqual(['Root', 'Legal', 'Contracts', 'Agreement.pdf']);
+    expect(nodeSummarySchema.parse(await reader.getNode(viewer, ids.agreement))).toMatchObject({
+      id: ids.agreement,
+      accessRole: 'VIEWER',
+      isShared: true,
+    });
+    expect(
+      (await reader.getBreadcrumbs(viewer, ids.agreement)).items.map(({ name }) => name),
+    ).toEqual(['Legal', 'Contracts', 'Agreement.pdf']);
+    expect((await reader.getBreadcrumbs(viewer, ids.legal)).items).toHaveLength(1);
+    await expect(reader.getNode(viewer, ids.root)).rejects.toMatchObject({
+      response: { error: { code: 'ACCESS_DENIED' } },
+    });
+    await expect(reader.getNode(viewer, ids.sibling)).rejects.toMatchObject({
+      response: { error: { code: 'ACCESS_DENIED' } },
+    });
+    const after = await database.node.findMany({
+      where: { id: { in: observedIds } },
+      select: { id: true, revision: true, updatedAt: true },
+    });
+    expect(after).toEqual(before);
+  });
+
+  it('denies unrelated, foreign-room, deleted, missing, and revoked-share reads', async () => {
+    const database = requirePrisma(prisma);
+    const reader = requireReadService(readService);
+    const client = requireAdmin(admin);
+    const unrelated = authenticatedPrincipal(ids.unrelated, 'unrelated@example.com');
+    await seedReadTree(database);
+    await seedForeignRoom(client);
+    await database.node.createMany({
+      data: [
+        {
+          id: ids.tombstonedAncestor,
+          dataRoomId: ids.room,
+          parentId: ids.root,
+          kind: 'FOLDER',
+          name: 'Archived',
+          normalizedName: 'archived',
+          deletedAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+        {
+          id: ids.tombstonedDescendant,
+          dataRoomId: ids.room,
+          parentId: ids.tombstonedAncestor,
+          kind: 'FOLDER',
+          name: 'Still active',
+          normalizedName: 'still active',
+        },
+        {
+          id: ids.deletedTarget,
+          dataRoomId: ids.room,
+          parentId: ids.root,
+          kind: 'FOLDER',
+          name: 'Deleted target',
+          normalizedName: 'deleted target',
+          deletedAt: new Date('2026-01-01T00:00:00.000Z'),
+        },
+      ],
+    });
+    await database.share.create({
+      data: {
+        id: ids.share,
+        targetNodeId: ids.legal,
+        grantedByUserId: ids.owner,
+        principalType: 'USER',
+        role: 'VIEWER',
+        recipientUserId: ids.viewer,
+        revokedAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    });
+
+    const deniedReads = [
+      () => reader.getNode(unrelated, ids.agreement),
+      () => reader.getNode(owner, ids.foreignChildA),
+      () => reader.getBreadcrumbs(owner, ids.tombstonedDescendant),
+      () => reader.getNode(owner, ids.deletedTarget),
+      () => reader.getNode(owner, ids.missingTarget),
+      () => reader.getBreadcrumbs(viewer, ids.agreement),
+    ];
+    for (const read of deniedReads) {
+      await expect(read()).rejects.toMatchObject({
+        response: { error: { code: 'ACCESS_DENIED', message: 'Access denied.' } },
+      });
+    }
   });
 
   it('denies a file parent without an exact attempted write', async () => {
@@ -405,6 +557,11 @@ function requireListService(service: NodesListService | undefined): NodesListSer
   return service;
 }
 
+function requireReadService(service: NodesReadService | undefined): NodesReadService {
+  if (!service) throw new Error('PostgreSQL read service is unavailable.');
+  return service;
+}
+
 function requireAdmin(admin: Client | undefined): Client {
   if (!admin) throw new Error('PostgreSQL integration admin client is unavailable.');
   return admin;
@@ -432,6 +589,48 @@ function paginationChild(index: number) {
     mimeType: kind === 'FILE' ? 'application/pdf' : null,
     storageKey: kind === 'FILE' ? `tests/page/${position}.pdf` : null,
   };
+}
+
+async function seedReadTree(prisma: PrismaClient): Promise<void> {
+  await prisma.node.createMany({
+    data: [
+      {
+        id: ids.legal,
+        dataRoomId: ids.room,
+        parentId: ids.root,
+        kind: 'FOLDER',
+        name: 'Legal',
+        normalizedName: 'legal',
+      },
+      {
+        id: ids.contracts,
+        dataRoomId: ids.room,
+        parentId: ids.legal,
+        kind: 'FOLDER',
+        name: 'Contracts',
+        normalizedName: 'contracts',
+      },
+      {
+        id: ids.agreement,
+        dataRoomId: ids.room,
+        parentId: ids.contracts,
+        kind: 'FILE',
+        name: 'Agreement.pdf',
+        normalizedName: 'agreement.pdf',
+        sizeBytes: 1n,
+        mimeType: 'application/pdf',
+        storageKey: 'private/agreement',
+      },
+      {
+        id: ids.sibling,
+        dataRoomId: ids.room,
+        parentId: ids.root,
+        kind: 'FOLDER',
+        name: 'Outside',
+        normalizedName: 'outside',
+      },
+    ],
+  });
 }
 
 async function createFolderFixture(

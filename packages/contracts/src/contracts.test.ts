@@ -7,6 +7,7 @@ import {
   nodeNameSchema,
   prepareUploadRequestSchema,
   listNodeChildrenResponseSchema,
+  nodeBreadcrumbsResponseSchema,
 } from './index.js';
 
 const validBootstrapResponse = {
@@ -94,5 +95,15 @@ describe('shared contracts', () => {
         pageInfo: { nextCursor: null, hasNextPage: false },
       }),
     ).toEqual({ items: [], pageInfo: { nextCursor: null, hasNextPage: false } });
+  });
+
+  it('parses the narrow breadcrumb response without pagination fields', () => {
+    expect(
+      nodeBreadcrumbsResponseSchema.parse({
+        items: [{ id: '550e8400-e29b-41d4-a716-446655440000', name: 'Legal' }],
+      }),
+    ).toEqual({
+      items: [{ id: '550e8400-e29b-41d4-a716-446655440000', name: 'Legal' }],
+    });
   });
 });
