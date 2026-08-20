@@ -75,7 +75,8 @@ run('NodesService PostgreSQL integration', () => {
       CREATE TABLE "Share" (
         "id" uuid PRIMARY KEY, "targetNodeId" uuid NOT NULL, "grantedByUserId" uuid NOT NULL,
         "principalType" "SharePrincipalType" NOT NULL, "role" "ShareRole" NOT NULL,
-        "recipientUserId" uuid, "recipientEmail" text, "revokedAt" timestamptz
+        "recipientUserId" uuid, "recipientEmail" text, "tokenHash" bytea,
+        "createdAt" timestamptz NOT NULL DEFAULT now(), "revokedAt" timestamptz
       );
       CREATE TABLE "RuntimeControl" (
         "id" integer PRIMARY KEY DEFAULT 1, "registrationOpen" boolean NOT NULL DEFAULT false,
