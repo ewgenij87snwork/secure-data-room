@@ -2,7 +2,7 @@ import { HttpStatus } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import type { NodeSummary } from '@data-room/contracts';
 import { authenticatedPrincipal } from '../auth/principal.js';
-import type { OwnedFolder } from '../access-control/access-policy.service.js';
+import type { OwnedFolder, OwnedNode } from '../access-control/access-policy.service.js';
 import { ApiException } from '../common/api-exception.js';
 import { RuntimeControlsService } from '../runtime-controls/runtime-controls.service.js';
 import { NodesService, normalizedNodeName } from './nodes.service.js';
@@ -162,6 +162,10 @@ describe('NodesService', () => {
     ).rejects.toMatchObject({
       response: { error: { code: 'NAME_CONFLICT', details: { suggestedName: 'Legal (1)' } } },
     });
+    expect(h.database.node.findMany).toHaveBeenCalledWith({
+      where: { dataRoomId: roomId, parentId, deletedAt: null },
+      select: { normalizedName: true },
+    });
   });
 
   it('maps unknown persistence failures to a safe internal error', async () => {
@@ -221,5 +225,98 @@ describe('NodesService', () => {
       .createFolder(principal, { parentId, name: 'Legal' })
       .catch((cause: unknown) => cause);
     expect(error).toBe(expected);
+  });
+});
+
+const ownedRenameNode: OwnedNode = {
+  nodeId,
+  dataRoomId: roomId,
+  parentId,
+  kind: 'FOLDER',
+  accessRole: 'OWNER',
+  accessRootNodeId: parentId,
+};
+
+function renameHarness() {
+  const transaction = {
+    node: {
+      updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      findUnique: vi.fn().mockResolvedValue({
+        ...createdNode({ name: 'Renamed', revision: 2 }),
+        normalizedName: 'renamed',
+        deletedAt: null,
+        createdAt: new Date('2026-01-01T00:00:00.000Z'),
+        updatedAt: new Date('2026-01-01T00:00:01.000Z'),
+      }),
+    },
+  };
+  const database = {
+    $transaction: vi.fn((callback: (value: typeof transaction) => Promise<unknown>) =>
+      callback(transaction),
+    ),
+    node: { findMany: vi.fn().mockResolvedValue([]) },
+  };
+  const policy = {
+    assertCanManageNode: vi.fn().mockResolvedValue(ownedRenameNode),
+  };
+  return { database, policy, runtime: new RuntimeControlsService(), transaction };
+}
+
+describe('NodesService rename', () => {
+  it('renames with the expected revision and returns the incremented summary', async () => {
+    const h = renameHarness();
+    const service = new NodesService(h.database as never, h.policy as never, h.runtime);
+
+    await expect(
+      service.renameNode(principal, nodeId, { name: 'Renamed', expectedRevision: 1 }),
+    ).resolves.toMatchObject({ id: nodeId, name: 'Renamed', revision: 2 });
+    expect(h.policy.assertCanManageNode).toHaveBeenCalledWith(principal, nodeId);
+  });
+
+  it('maps a stale compare-and-swap to CONFLICT', async () => {
+    const h = renameHarness();
+    h.transaction.node.updateMany.mockResolvedValue({ count: 0 });
+    h.transaction.node.findUnique.mockResolvedValue({
+      ...createdNode({ revision: 2 }),
+      normalizedName: 'legal',
+      deletedAt: null,
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-01-01T00:00:01.000Z'),
+    });
+    const service = new NodesService(h.database as never, h.policy as never, h.runtime);
+
+    await expect(
+      service.renameNode(principal, nodeId, { name: 'Renamed', expectedRevision: 1 }),
+    ).rejects.toMatchObject({ response: { error: { code: 'CONFLICT' } } });
+  });
+
+  it('maps a raw PostgreSQL sibling conflict using the renamed node parent', async () => {
+    const h = renameHarness();
+    h.transaction.node.updateMany.mockRejectedValue(
+      Object.assign(new Error('private constraint'), { code: 'P2002' }),
+    );
+    h.database.node.findMany.mockResolvedValue([{ normalizedName: 'existing' }]);
+    const service = new NodesService(h.database as never, h.policy as never, h.runtime);
+
+    await expect(
+      service.renameNode(principal, nodeId, { name: 'Existing', expectedRevision: 1 }),
+    ).rejects.toMatchObject({
+      response: { error: { code: 'NAME_CONFLICT', details: { suggestedName: 'Existing (1)' } } },
+    });
+    expect(h.database.node.findMany).toHaveBeenCalledWith({
+      where: { dataRoomId: roomId, parentId, deletedAt: null },
+      select: { normalizedName: true },
+    });
+  });
+
+  it('does not attempt a rename when owner policy denies the node', async () => {
+    const h = renameHarness();
+    h.policy.assertCanManageNode.mockRejectedValue(new Error('denied'));
+    const service = new NodesService(h.database as never, h.policy as never, h.runtime);
+
+    await expect(
+      service.renameNode(principal, nodeId, { name: 'Renamed', expectedRevision: 1 }),
+    ).rejects.toThrow('denied');
+    expect(h.database.$transaction).not.toHaveBeenCalled();
   });
 });

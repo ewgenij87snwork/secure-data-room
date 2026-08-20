@@ -77,4 +77,5 @@ export type ListNodeChildrenResponse = z.infer<typeof listNodeChildrenResponseSc
 export type BreadcrumbItem = z.infer<typeof breadcrumbItemSchema>;
 export type NodeBreadcrumbsResponse = z.infer<typeof nodeBreadcrumbsResponseSchema>;
 export type CreateFolderRequest = z.infer<typeof createFolderRequestSchema>;
+export type RenameNodeRequest = z.infer<typeof renameNodeRequestSchema>;
 export type DeleteImpact = z.infer<typeof deleteImpactSchema>;

@@ -1,5 +1,5 @@
 import { HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
-import type { CreateFolderRequest, NodeSummary } from '@data-room/contracts';
+import type { CreateFolderRequest, NodeSummary, RenameNodeRequest } from '@data-room/contracts';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../database/prisma.service.js';
 import type { AuthenticatedPrincipal } from '../auth/principal.js';
@@ -7,6 +7,7 @@ import {
   AccessPolicyService,
   AccessDeniedException,
   type OwnedFolder,
+  type OwnedNode,
 } from '../access-control/access-policy.service.js';
 import {
   RuntimeControlsService,
@@ -22,6 +23,8 @@ interface ParentProof {
   kind: 'FOLDER';
   ownerId: string;
 }
+
+type PersistedNodeRow = NodeRow & Readonly<{ deletedAt: Date | null }>;
 
 export interface NodesTransaction extends RuntimeControlsTransaction {
   $queryRaw<T>(query: Prisma.Sql): Promise<T>;
@@ -41,6 +44,20 @@ export interface NodesTransaction extends RuntimeControlsTransaction {
         storageKey: null;
       };
     }): Promise<NodeRow>;
+    updateMany(args: {
+      where: {
+        id: string;
+        dataRoomId: string;
+        revision: number;
+        deletedAt: null;
+      };
+      data: {
+        name: string;
+        normalizedName: string;
+        revision: { increment: 1 };
+      };
+    }): Promise<{ count: number }>;
+    findUnique(args: { where: { id: string } }): Promise<PersistedNodeRow | null>;
   };
 }
 
@@ -48,7 +65,7 @@ export interface NodesDatabase {
   $transaction<T>(callback: (tx: NodesTransaction) => Promise<T>): Promise<T>;
   node: {
     findMany(args: {
-      where: { dataRoomId: string; parentId: string; deletedAt: null };
+      where: { dataRoomId: string; parentId: string | null; deletedAt: null };
       select: { normalizedName: true };
     }): Promise<{ normalizedName: string }[]>;
   };
@@ -73,11 +90,46 @@ export class NodesService {
       );
     } catch (error) {
       if (error instanceof HttpException) throw error;
-      if (isUniqueConflict(error)) throw await this.nameConflict(access, input.name);
+      if (isUniqueConflict(error)) {
+        throw await this.nameConflict({
+          access,
+          name: input.name,
+          parentId: access.nodeId,
+          failureMessage: 'Folder creation failed.',
+        });
+      }
       throw new ApiException(
         'INTERNAL_ERROR',
         HttpStatus.INTERNAL_SERVER_ERROR,
         'Folder creation failed.',
+      );
+    }
+  }
+
+  async renameNode(
+    principal: AuthenticatedPrincipal,
+    nodeId: string,
+    input: RenameNodeRequest,
+  ): Promise<NodeSummary> {
+    const access = await this.accessPolicy.assertCanManageNode(principal, nodeId);
+    try {
+      return await this.prisma.$transaction((transaction) =>
+        renameInTransaction(transaction, access, input),
+      );
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      if (isUniqueConflict(error)) {
+        throw await this.nameConflict({
+          access,
+          name: input.name,
+          parentId: access.parentId,
+          failureMessage: 'Node rename failed.',
+        });
+      }
+      throw new ApiException(
+        'INTERNAL_ERROR',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'Node rename failed.',
       );
     }
   }
@@ -123,24 +175,33 @@ export class NodesService {
     return toNodeSummary(node, 'OWNER');
   }
 
-  private async nameConflict(access: OwnedFolder, name: string): Promise<ApiException> {
+  private async nameConflict(input: {
+    access: OwnedNode;
+    name: string;
+    parentId: string | null;
+    failureMessage: string;
+  }): Promise<ApiException> {
     let siblings: { normalizedName: string }[];
     try {
       siblings = await this.prisma.node.findMany({
-        where: { dataRoomId: access.dataRoomId, parentId: access.nodeId, deletedAt: null },
+        where: {
+          dataRoomId: input.access.dataRoomId,
+          parentId: input.parentId,
+          deletedAt: null,
+        },
         select: { normalizedName: true },
       });
     } catch {
       throw new ApiException(
         'INTERNAL_ERROR',
         HttpStatus.INTERNAL_SERVER_ERROR,
-        'Folder creation failed.',
+        input.failureMessage,
       );
     }
     const names = new Set(siblings.map((sibling) => sibling.normalizedName));
-    let suggestedName = suffixedNodeName(name, 1);
+    let suggestedName = suffixedNodeName(input.name, 1);
     for (let attempt = 1; attempt <= 100; attempt += 1) {
-      const candidate = suffixedNodeName(name, attempt);
+      const candidate = suffixedNodeName(input.name, attempt);
       if (!names.has(normalizedNodeName(candidate))) {
         suggestedName = candidate;
         break;
@@ -153,6 +214,34 @@ export class NodesService {
       { suggestedName },
     );
   }
+}
+
+async function renameInTransaction(
+  transaction: NodesTransaction,
+  access: OwnedNode,
+  input: RenameNodeRequest,
+): Promise<NodeSummary> {
+  const updated = await transaction.node.updateMany({
+    where: {
+      id: access.nodeId,
+      dataRoomId: access.dataRoomId,
+      revision: input.expectedRevision,
+      deletedAt: null,
+    },
+    data: {
+      name: input.name,
+      normalizedName: normalizedNodeName(input.name),
+      revision: { increment: 1 },
+    },
+  });
+  const current = await transaction.node.findUnique({ where: { id: access.nodeId } });
+  if (updated.count === 1 && current?.deletedAt === null) {
+    return toNodeSummary(current, 'OWNER');
+  }
+  if (current?.dataRoomId === access.dataRoomId && current.deletedAt === null) {
+    throw new ApiException('CONFLICT', HttpStatus.CONFLICT, 'The node changed.');
+  }
+  throw new ApiException('RESOURCE_GONE', HttpStatus.GONE, 'The node is no longer available.');
 }
 
 async function proveParent(
@@ -180,7 +269,11 @@ async function proveParent(
 }
 
 function isUniqueConflict(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && error.code === 'P2002';
+  if (typeof error !== 'object' || error === null || !('code' in error)) return false;
+  if (error.code === 'P2002' || error.code === '23505') return true;
+  if (error.code !== 'P2010' || !('meta' in error)) return false;
+  const meta = error.meta;
+  return typeof meta === 'object' && meta !== null && 'code' in meta && meta.code === '23505';
 }
 
 export { normalizedNodeName, suffixedNodeName } from './node-name.service.js';

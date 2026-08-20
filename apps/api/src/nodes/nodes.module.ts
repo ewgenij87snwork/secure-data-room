@@ -7,11 +7,12 @@ import { NodesController } from './nodes.controller.js';
 import { NodesService } from './nodes.service.js';
 import { NodesListService } from './nodes-list.service.js';
 import { NodesReadService } from './nodes-read.service.js';
+import { DeleteService } from './delete.service.js';
 
 @Module({
   imports: [PrismaModule, AuthModule, AccessControlModule, RuntimeControlsModule],
   controllers: [NodesController],
-  providers: [NodesService, NodesListService, NodesReadService],
+  providers: [NodesService, NodesListService, NodesReadService, DeleteService],
   exports: [NodesService],
 })
 export class NodesModule {}
