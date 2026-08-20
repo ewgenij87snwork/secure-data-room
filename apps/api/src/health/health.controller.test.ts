@@ -4,7 +4,6 @@ import type { HealthController as HealthControllerInstance } from './health.cont
 
 vi.stubEnv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/postgres');
 vi.stubEnv('SUPABASE_URL', 'https://example.supabase.co');
-vi.stubEnv('SUPABASE_JWKS_URL', 'https://example.supabase.co/auth/v1/.well-known/jwks.json');
 vi.stubEnv('SUPABASE_JWT_ISSUER', 'https://example.supabase.co/auth/v1');
 vi.stubEnv('SUPABASE_SERVICE_ROLE_KEY', 'service-role-key-that-is-long-enough');
 vi.stubEnv('APP_VERSION', 'test-version');

@@ -8,7 +8,6 @@ const envSchema = z.object({
   GIT_COMMIT_SHA: z.string().min(1).default('local'),
   DATABASE_URL: z.url(),
   SUPABASE_URL: z.url(),
-  SUPABASE_JWKS_URL: z.url(),
   SUPABASE_JWT_ISSUER: z.url(),
   SUPABASE_JWT_AUDIENCE: z.string().min(1).default('authenticated'),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(20),
