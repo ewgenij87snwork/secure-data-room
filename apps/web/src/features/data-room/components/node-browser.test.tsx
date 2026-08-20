@@ -1,5 +1,6 @@
 import type { NodeSummary } from '@data-room/contracts';
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { NodeBrowser } from './node-browser.js';
@@ -60,6 +61,29 @@ describe('NodeBrowser', () => {
       screen.queryByRole('button', { name: `Actions for ${folder.name}` }),
     ).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Actions for Owned.pdf' })).toHaveLength(2);
+  });
+
+  it('retains stale rows and exposes a retry when refresh fails', async () => {
+    const retry = vi.fn();
+    render(
+      <MemoryRouter>
+        <NodeBrowser
+          nodes={[folder]}
+          canManage={false}
+          isError
+          isRefreshing
+          onRetry={retry}
+          onRename={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getAllByText(folder.name)).toHaveLength(2);
+    expect(screen.getByRole('status')).toHaveTextContent('Refreshing');
+    expect(screen.getByRole('alert')).toHaveTextContent('could not be refreshed');
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(retry).toHaveBeenCalledOnce();
   });
 });
 

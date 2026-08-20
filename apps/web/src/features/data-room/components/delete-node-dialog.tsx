@@ -4,6 +4,7 @@ import { ApiClientError } from '../../../lib/api-error.js';
 import { mutationErrorMessage, pluralize } from '../dialog-helpers.js';
 import { useDeleteImpact, useDeleteNode } from '../data-room-queries.js';
 import { formatBytes } from './node-view-model.js';
+import { useOnlineStatus } from '../../../lib/online-status-hook.js';
 
 export function DeleteNodeDialog({
   open,
@@ -18,6 +19,7 @@ export function DeleteNodeDialog({
 }>): React.JSX.Element {
   const impact = useDeleteImpact(node.id, open);
   const mutation = useDeleteNode();
+  const isOnline = useOnlineStatus();
 
   const close = (): void => {
     mutation.reset();
@@ -102,7 +104,7 @@ export function DeleteNodeDialog({
         <button
           className="destructive-button"
           type="button"
-          disabled={!impact.data || mutation.isPending}
+          disabled={!isOnline || !impact.data || mutation.isPending}
           onClick={() =>
             mutation.mutate(node, {
               onSuccess: close,

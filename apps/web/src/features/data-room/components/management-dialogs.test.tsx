@@ -108,6 +108,22 @@ describe('management dialogs', () => {
     expect(requestBody(fetchMock, 0)).toEqual({ name: 'Tax', expectedRevision: 1 });
   });
 
+  it('disables an open rename submit after the browser goes offline', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ...folderNode(), name: 'Tax' }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { RenameNodeDialog } = await import('./rename-node-dialog.js');
+    renderWithClient(<RenameNodeDialog open onOpenChange={vi.fn()} node={folderNode()} />);
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    await userEvent.clear(input);
+    await userEvent.type(input, 'Tax');
+
+    window.dispatchEvent(new Event('offline'));
+
+    expect(await screen.findByRole('button', { name: 'Save name' })).toBeDisabled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    window.dispatchEvent(new Event('online'));
+  });
+
   it('keeps an irreversible delete dialog locked until the request settles', async () => {
     const impact = {
       rootNodeId: nodeId,

@@ -1,8 +1,8 @@
 import type { NodeSummary } from '@data-room/contracts';
-import { LoaderCircle } from 'lucide-react';
 import { NodeCardList } from './node-card-list.js';
 import { NodeTable } from './node-table.js';
 import { toNodeViewModel } from './node-view-model.js';
+import { DataRoomState } from './data-room-state.js';
 
 export function NodeBrowser({
   nodes,
@@ -13,6 +13,7 @@ export function NodeBrowser({
   hasNextPage = false,
   isLoadingMore = false,
   onLoadMore,
+  onRetry,
   onRename,
   onDelete,
   onMove,
@@ -25,6 +26,7 @@ export function NodeBrowser({
   hasNextPage?: boolean;
   isLoadingMore?: boolean;
   onLoadMore?: () => void;
+  onRetry?: () => void;
   onRename: (node: NodeSummary, returnFocusElement: HTMLElement | null) => void;
   onDelete: (node: NodeSummary, returnFocusElement: HTMLElement | null) => void;
   onMove?: (node: NodeSummary, returnFocusElement: HTMLElement | null) => void;
@@ -32,19 +34,17 @@ export function NodeBrowser({
   const items = nodes.map((node) => toNodeViewModel(node, canManage));
 
   if (isLoading && items.length === 0) {
-    return (
-      <div className="node-browser-state" role="status">
-        <LoaderCircle className="spin" size={19} aria-hidden="true" />
-        Loading folder contents…
-      </div>
-    );
+    return <DataRoomState kind="loading" label="Loading folder contents…" />;
   }
 
   if (isError && items.length === 0) {
     return (
-      <div className="node-browser-state node-browser-state--error" role="alert">
-        Folder contents could not be loaded. Try again in a moment.
-      </div>
+      <DataRoomState
+        kind="error"
+        title="Folder contents are unavailable"
+        message="The connection could not be completed. Your data is unchanged."
+        onRetry={onRetry}
+      />
     );
   }
 
@@ -64,6 +64,16 @@ export function NodeBrowser({
 
   return (
     <section className="node-browser" aria-label="Folder contents" aria-busy={isRefreshing}>
+      {isError ? (
+        <div className="node-browser__stale-error" role="alert">
+          <span>Folder contents could not be refreshed. Showing the last available data.</span>
+          {onRetry ? (
+            <button className="secondary-button" type="button" onClick={onRetry}>
+              Try again
+            </button>
+          ) : null}
+        </div>
+      ) : null}
       {isRefreshing ? (
         <span className="node-browser__refresh" role="status">
           Refreshing…

@@ -6,6 +6,7 @@ import { ResponsiveDialog } from '../../../components/ui/responsive-dialog.js';
 import { ApiClientError } from '../../../lib/api-error.js';
 import { mutationErrorMessage, suggestedNodeName } from '../dialog-helpers.js';
 import { useMoveNode, useNodeChildren, useRenameNode } from '../data-room-queries.js';
+import { useOnlineStatus } from '../../../lib/online-status-hook.js';
 
 export function MoveFileDialog({
   open,
@@ -28,6 +29,7 @@ export function MoveFileDialog({
   const mutation = useMoveNode();
   const renameMutation = useRenameNode();
   const queryClient = useQueryClient();
+  const isOnline = useOnlineStatus();
   const recoveryError = renameMutation.error ?? mutation.error;
   const suggestion = suggestedNodeName(recoveryError);
   const isWorking =
@@ -55,7 +57,7 @@ export function MoveFileDialog({
   };
 
   const moveCurrentNode = async (nodeToMove: NodeSummary): Promise<void> => {
-    if (!selected || isWorking) return;
+    if (!isOnline || !selected || isWorking) return;
     mutation.reset();
     setRecoveryPhase('moving');
     try {
@@ -67,7 +69,7 @@ export function MoveFileDialog({
   };
 
   const renameAndMove = async (nextName: string): Promise<void> => {
-    if (!selected || isWorking) return;
+    if (!isOnline || !selected || isWorking) return;
     mutation.reset();
     renameMutation.reset();
     setRecoveryPhase('renaming');
@@ -188,7 +190,7 @@ export function MoveFileDialog({
         <button
           className="primary-button"
           type="button"
-          disabled={!selected || selected === currentFolderId || isWorking}
+          disabled={!isOnline || !selected || selected === currentFolderId || isWorking}
           onClick={() => void moveCurrentNode(effectiveNode)}
         >
           {isWorking ? 'Moving…' : 'Move file'}

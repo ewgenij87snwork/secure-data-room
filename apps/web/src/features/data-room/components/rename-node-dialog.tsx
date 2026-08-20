@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { ResponsiveDialog } from '../../../components/ui/responsive-dialog.js';
 import { mutationErrorMessage, parseNodeName, suggestedNodeName } from '../dialog-helpers.js';
 import { useRenameNode } from '../data-room-queries.js';
+import { useOnlineStatus } from '../../../lib/online-status-hook.js';
 
 export function RenameNodeDialog({
   open,
@@ -18,6 +19,7 @@ export function RenameNodeDialog({
   const [name, setName] = useState(node.name);
   const inputRef = useRef<HTMLInputElement>(null);
   const mutation = useRenameNode();
+  const isOnline = useOnlineStatus();
   const parsedName = parseNodeName(name);
   const suggestion = suggestedNodeName(mutation.error);
 
@@ -38,7 +40,7 @@ export function RenameNodeDialog({
         className="management-form"
         onSubmit={(event) => {
           event.preventDefault();
-          if (!parsedName || parsedName === node.name) return;
+          if (!isOnline || !parsedName || parsedName === node.name) return;
           mutation.mutate({ node, name: parsedName }, { onSuccess: () => changeOpen(false) });
         }}
       >
@@ -80,7 +82,7 @@ export function RenameNodeDialog({
           <button
             className="primary-button"
             type="submit"
-            disabled={!parsedName || parsedName === node.name || mutation.isPending}
+            disabled={!isOnline || !parsedName || parsedName === node.name || mutation.isPending}
           >
             {mutation.isPending ? 'Saving…' : 'Save name'}
           </button>

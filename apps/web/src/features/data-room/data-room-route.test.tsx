@@ -1,6 +1,6 @@
 import type { BootstrapResponse, NodeSummary } from '@data-room/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -114,6 +114,37 @@ describe('DataRoomRoute', () => {
     expect(await screen.findByText(/Read-only access/)).toBeVisible();
     expect(screen.queryByRole('button', { name: 'New folder' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Actions for Contracts/ })).not.toBeInTheDocument();
+  });
+
+  it('keeps cached node content visible but announces a stale node error with retry', async () => {
+    const current = node({ id: rootId, parentId: null, name: 'Due diligence' });
+    let nodeReads = 0;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (url.pathname.endsWith(`/nodes/${rootId}`) && !url.pathname.includes('/children')) {
+          nodeReads += 1;
+          return nodeReads === 1
+            ? Promise.resolve(jsonResponse(current))
+            : Promise.resolve(
+                jsonResponse({ error: { code: 'NETWORK_ERROR', message: 'offline' } }, 503),
+              );
+        }
+        return routeResponse(input, current, []);
+      }),
+    );
+
+    await renderRoute();
+    expect(await screen.findByRole('heading', { name: 'Due diligence' })).toBeVisible();
+    await act(() => Promise.resolve(window.dispatchEvent(new Event('offline'))));
+    await act(() => Promise.resolve(window.dispatchEvent(new Event('online'))));
+    await userEvent.click(await screen.findByRole('button', { name: 'Refresh now' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('could not be refreshed');
+    expect(screen.getByRole('heading', { name: 'Due diligence' })).toBeVisible();
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByRole('heading', { name: 'Due diligence' })).toBeVisible();
   });
 
   it('passes the mounted folder id as the move tree current target', async () => {

@@ -19,6 +19,7 @@ import { useNode, useNodeBreadcrumbs, useNodeChildren } from './data-room-querie
 import { UploadDropzone } from '../uploads/components/upload-dropzone.js';
 import { useOptionalUploadQueue } from '../uploads/upload-queue-context.js';
 import { shouldShowUploadDropzone } from './data-room-upload-visibility.js';
+import { useOnlineStatus } from '../../lib/online-status-hook.js';
 
 interface SelectedNode {
   node: NodeSummary;
@@ -30,6 +31,7 @@ export function DataRoomRoute(): React.JSX.Element {
   const { bootstrap } = useOutletContext<DataRoomOutletContext>();
   const auth = useAuth();
   const queue = useOptionalUploadQueue();
+  const isOnline = useOnlineStatus();
   const addFiles = queue?.addFiles;
   const resolvedNodeId = nodeId ?? bootstrap.room.rootNodeId;
   const nodeQuery = useNode(resolvedNodeId);
@@ -43,6 +45,7 @@ export function DataRoomRoute(): React.JSX.Element {
   const accountLabel = bootstrap.user.displayName ?? bootstrap.user.email;
   const currentNode = nodeQuery.data;
   const canManage = currentNode?.accessRole === 'OWNER' && !bootstrap.runtime.maintenanceMode;
+  const canMutate = canManage && isOnline;
   const canUpload = shouldShowUploadDropzone({
     canManage,
     uploadsEnabled: bootstrap.runtime.uploadsEnabled,
@@ -57,6 +60,13 @@ export function DataRoomRoute(): React.JSX.Element {
       }
       header={<WorkspaceHeader accountLabel={accountLabel} onSignOut={() => void auth.signOut()} />}
       context={context}
+      onReconnect={() => {
+        void Promise.all([
+          nodeQuery.refetch(),
+          breadcrumbsQuery.refetch(),
+          childrenQuery.refetch(),
+        ]);
+      }}
     >
       {content}
     </WorkspaceShell>
@@ -72,13 +82,22 @@ export function DataRoomRoute(): React.JSX.Element {
     );
   }
 
-  if (nodeQuery.isError || !currentNode) {
+  if (!currentNode) {
     const state = nodeErrorState(nodeQuery.error);
     return shell(
       <section className="workspace-state" aria-labelledby="workspace-title">
         <p className="eyebrow">Document room</p>
         <h1 id="workspace-title">{state.title}</h1>
         <p role="alert">{state.message}</p>
+        {state.recoverable ? (
+          <button
+            className="secondary-button"
+            type="button"
+            onClick={() => void nodeQuery.refetch()}
+          >
+            Try again
+          </button>
+        ) : null}
         <Link className="secondary-button" to={`/workspace/${bootstrap.room.rootNodeId}`}>
           Return to all files
         </Link>
@@ -107,7 +126,7 @@ export function DataRoomRoute(): React.JSX.Element {
             </h1>
           </div>
           {isFolder ? (
-            <FolderToolbar canManage={canManage} onCreateFolder={setCreateReturnFocus} />
+            <FolderToolbar canManage={canMutate} onCreateFolder={setCreateReturnFocus} />
           ) : null}
         </div>
         {breadcrumbsQuery.isError ? (
@@ -115,15 +134,28 @@ export function DataRoomRoute(): React.JSX.Element {
             The folder opened, but its breadcrumb path is temporarily unavailable.
           </p>
         ) : null}
+        {nodeQuery.isError ? (
+          <div className="inline-notice inline-notice--error" role="alert">
+            <span>Folder details could not be refreshed. Showing the last available data.</span>
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={() => void nodeQuery.refetch()}
+            >
+              Try again
+            </button>
+          </div>
+        ) : null}
         {isFolder ? (
           <NodeBrowser
             nodes={children}
-            canManage={canManage}
+            canManage={canMutate}
             isLoading={childrenQuery.isLoading}
             isError={childrenQuery.isError}
             isRefreshing={childrenQuery.isFetching && !childrenQuery.isFetchingNextPage}
             hasNextPage={childrenQuery.hasNextPage}
             isLoadingMore={childrenQuery.isFetchingNextPage}
+            onRetry={() => void childrenQuery.refetch()}
             onLoadMore={() => void childrenQuery.fetchNextPage()}
             onRename={(node, returnFocusElement) => setRenameTarget({ node, returnFocusElement })}
             onDelete={(node, returnFocusElement) => setDeleteTarget({ node, returnFocusElement })}
@@ -136,7 +168,7 @@ export function DataRoomRoute(): React.JSX.Element {
             </p>
           </section>
         )}
-        {canUpload ? (
+        {canUpload && isOnline ? (
           <UploadDropzone
             disabled={!auth.accessToken || !addFiles}
             onFilesSelected={(files) => {
@@ -146,7 +178,7 @@ export function DataRoomRoute(): React.JSX.Element {
         ) : null}
       </div>
 
-      {isFolder && canManage && createReturnFocus ? (
+      {isFolder && canMutate && createReturnFocus ? (
         <CreateFolderDialog
           open
           onOpenChange={(open) => {
@@ -195,7 +227,9 @@ export function DataRoomRoute(): React.JSX.Element {
   );
 }
 
-function nodeErrorState(error: unknown): Readonly<{ title: string; message: string }> {
+function nodeErrorState(
+  error: unknown,
+): Readonly<{ title: string; message: string; recoverable?: boolean }> {
   if (error instanceof ApiClientError) {
     if (error.code === 'RESOURCE_GONE' || error.code === 'RESOURCE_NOT_FOUND') {
       return {
@@ -212,6 +246,7 @@ function nodeErrorState(error: unknown): Readonly<{ title: string; message: stri
   }
   return {
     title: 'This item could not be opened.',
-    message: 'Please return to the room and try again.',
+    message: 'The connection could not be completed. Please try again.',
+    recoverable: true,
   };
 }
