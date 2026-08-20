@@ -133,8 +133,12 @@ run('UploadsService PostgreSQL integration', () => {
     );
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(5);
     expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    expect(results.find((result) => result.status === 'rejected')).toMatchObject({
+      status: 'rejected',
+      reason: { response: { error: { code: 'QUOTA_EXCEEDED' } } },
+    });
     await expect(
-      prisma.uploadSession.count({ where: { ownerId, status: 'PREPARED' } }),
+      prisma.uploadSession.count({ where: { ownerId, status: 'UPLOADING' } }),
     ).resolves.toBe(5);
   });
 

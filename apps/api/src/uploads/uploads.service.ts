@@ -81,7 +81,7 @@ export class UploadsService {
       try {
         sessions = await this.prisma.$transaction(
           (tx) => this.prepareInTransaction(tx, principal, input, parent, now),
-          { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+          { isolationLevel: Prisma.TransactionIsolationLevel.ReadCommitted },
         );
         break;
       } catch (error) {
@@ -179,6 +179,9 @@ export class UploadsService {
     parent: { nodeId: string; dataRoomId: string },
     now: Date,
   ): Promise<UploadSessionRow[]> {
+    await tx.$queryRaw(
+      Prisma.sql`SELECT id FROM "UserProfile" WHERE id = ${principal.userId}::uuid FOR UPDATE`,
+    );
     const parentRows = await tx.$queryRaw<
       Readonly<{
         id: string;
@@ -208,9 +211,6 @@ export class UploadsService {
       lockedParent.deletedAt !== null
     )
       throw uploadGone();
-    await tx.$queryRaw(
-      Prisma.sql`SELECT id FROM "UserProfile" WHERE id = ${principal.userId}::uuid FOR UPDATE`,
-    );
     const sessions: UploadSessionRow[] = [];
     const creates: { data: Record<string, unknown> }[] = [];
     const reinitializations: { id: string; data: Record<string, unknown> }[] = [];

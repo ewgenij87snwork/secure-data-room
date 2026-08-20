@@ -41,6 +41,7 @@ interface CreateArgs {
 }
 
 function database() {
+  const transactionQueryRaw = vi.fn();
   const session = {
     create: vi.fn<(args: CreateArgs) => Promise<unknown>>().mockResolvedValue({
       id: '66666666-6666-4666-8666-666666666666',
@@ -78,13 +79,14 @@ function database() {
   return {
     uploadSession: session,
     node: { create: vi.fn(), findUnique: vi.fn(), findMany: vi.fn() },
-    $transaction: vi.fn((callback: (tx: unknown) => unknown) =>
-      callback({
-        uploadSession: session,
-        node: { create: session.create, findUnique: session.findUnique },
-        $queryRaw: vi
-          .fn()
-          .mockResolvedValueOnce([
+    $transaction: vi.fn((callback: (tx: unknown) => unknown) => {
+      let queryCall = 0;
+      const queryRaw = vi.fn((query: unknown) => {
+        transactionQueryRaw(query);
+        queryCall += 1;
+        if (queryCall === 1) return Promise.resolve([]);
+        if (queryCall === 2)
+          return Promise.resolve([
             {
               id: parent.nodeId,
               dataRoomId: parent.dataRoomId,
@@ -92,11 +94,17 @@ function database() {
               kind: 'FOLDER',
               deletedAt: null,
             },
-          ])
-          .mockResolvedValue([]),
-      }),
-    ),
+          ]);
+        return Promise.resolve([]);
+      });
+      return callback({
+        uploadSession: session,
+        node: { create: session.create, findUnique: session.findUnique },
+        $queryRaw: queryRaw,
+      });
+    }),
     $queryRaw: vi.fn(),
+    transactionQueryRaw,
   };
 }
 
@@ -153,6 +161,22 @@ function deferred<T>() {
 }
 
 describe('UploadsService', () => {
+  it('locks the owner before parent proof with read-committed snapshots', async () => {
+    const db = database();
+    const { service: subject } = service({ db });
+
+    await subject.prepare(owner, input);
+
+    expect(db.$transaction).toHaveBeenCalledWith(expect.any(Function), {
+      isolationLevel: 'ReadCommitted',
+    });
+    const queries = db.transactionQueryRaw.mock.calls.map(([query]) =>
+      (query as { strings?: readonly string[] }).strings?.join(''),
+    );
+    expect(queries[0]).toContain('UserProfile');
+    expect(queries[1]).toContain('DataRoom');
+  });
+
   it('reuses an identical active client session without creating another reservation', async () => {
     const db = database();
     db.uploadSession.findUnique.mockResolvedValue({
@@ -402,8 +426,8 @@ describe('UploadsService', () => {
     await expect(subject.prepare(owner, input)).rejects.toMatchObject({
       response: { error: { code: 'RESOURCE_GONE' } },
     });
-    expect(queryRaw).toHaveBeenCalledOnce();
-    const query = queryRaw.mock.calls[0]?.[0] as { strings?: readonly string[] } | undefined;
+    expect(queryRaw).toHaveBeenCalledTimes(2);
+    const query = queryRaw.mock.calls[1]?.[0] as { strings?: readonly string[] } | undefined;
     expect(query?.strings?.join('')).toContain('DataRoom');
     expect(quota.assertBatchFits).not.toHaveBeenCalled();
   });
