@@ -3,6 +3,7 @@ import { Client, Pool } from 'pg';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
+  deleteImpactSchema,
   listNodeChildrenResponseSchema,
   nodeBreadcrumbsResponseSchema,
   nodeSummarySchema,
@@ -13,6 +14,7 @@ import { RuntimeControlsService } from '../runtime-controls/runtime-controls.ser
 import { NodesListService } from './nodes-list.service.js';
 import { NodesService } from './nodes.service.js';
 import { NodesReadService } from './nodes-read.service.js';
+import { DeleteService } from './delete.service.js';
 
 const databaseUrl = process.env.NODE_TEST_DATABASE_URL;
 const run = databaseUrl ? describe : describe.skip;
@@ -42,6 +44,22 @@ const ids = {
   foreignRoot: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
   foreignChildA: 'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',
   foreignChildB: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
+  renameTarget: '30000000-0000-4000-8000-000000000001',
+  renamePeer: '30000000-0000-4000-8000-000000000002',
+  renameRaceA: '30000000-0000-4000-8000-000000000003',
+  renameRaceB: '30000000-0000-4000-8000-000000000004',
+  deleteRoot: '40000000-0000-4000-8000-000000000001',
+  deleteFolder: '40000000-0000-4000-8000-000000000002',
+  deleteFileA: '40000000-0000-4000-8000-000000000003',
+  deleteFileB: '40000000-0000-4000-8000-000000000004',
+  deleteOldBranch: '40000000-0000-4000-8000-000000000005',
+  deleteOutside: '40000000-0000-4000-8000-000000000006',
+  deleteShareRoot: '50000000-0000-4000-8000-000000000001',
+  deleteShareFile: '50000000-0000-4000-8000-000000000002',
+  deleteShareOld: '50000000-0000-4000-8000-000000000003',
+  deleteShareOutside: '50000000-0000-4000-8000-000000000004',
+  concurrentDeleteRoot: '60000000-0000-4000-8000-000000000001',
+  concurrentDeleteFile: '60000000-0000-4000-8000-000000000002',
 };
 const schema = `nodes_${process.pid}_${Date.now()}`;
 const owner = authenticatedPrincipal(ids.owner, 'owner@example.com');
@@ -54,6 +72,7 @@ run('NodesService PostgreSQL integration', () => {
   let service: NodesService | undefined;
   let listService: NodesListService | undefined;
   let readService: NodesReadService | undefined;
+  let deleteService: DeleteService | undefined;
 
   beforeAll(async () => {
     const connectionString = requireDatabaseUrl();
@@ -64,6 +83,7 @@ run('NodesService PostgreSQL integration', () => {
       CREATE TYPE "NodeKind" AS ENUM ('FOLDER', 'FILE');
       CREATE TYPE "SharePrincipalType" AS ENUM ('USER', 'PUBLIC_LINK');
       CREATE TYPE "ShareRole" AS ENUM ('VIEWER', 'EDITOR');
+      CREATE TYPE "CleanupStatus" AS ENUM ('PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED');
       CREATE TABLE "UserProfile" ("id" uuid PRIMARY KEY, "email" text NOT NULL);
       CREATE TABLE "DataRoom" ("id" uuid PRIMARY KEY, "ownerId" uuid NOT NULL, "name" varchar(120) NOT NULL, "createdAt" timestamptz NOT NULL DEFAULT now(), "updatedAt" timestamptz NOT NULL DEFAULT now());
       CREATE TABLE "Node" (
@@ -83,6 +103,13 @@ run('NodesService PostgreSQL integration', () => {
         "uploadsEnabled" boolean NOT NULL DEFAULT false, "publicLinksEnabled" boolean NOT NULL DEFAULT false,
         "maintenanceMode" boolean NOT NULL DEFAULT false, "updatedAt" timestamptz NOT NULL DEFAULT now()
       );
+      CREATE TABLE "StorageCleanupJob" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(), "rootNodeId" uuid NOT NULL,
+        "status" "CleanupStatus" NOT NULL DEFAULT 'PENDING', "attempts" integer NOT NULL DEFAULT 0,
+        "nextAttemptAt" timestamptz NOT NULL DEFAULT now(), "lastErrorCode" varchar(80),
+        "createdAt" timestamptz NOT NULL DEFAULT now(), "updatedAt" timestamptz NOT NULL,
+        CONSTRAINT "StorageCleanupJob_rootNodeId_fkey" FOREIGN KEY ("rootNodeId") REFERENCES "Node" ("id")
+      );
       ALTER TABLE "Node" ADD CONSTRAINT "node_kind_fields_ck" CHECK (
         ("kind" = 'FOLDER' AND "sizeBytes" IS NULL AND "mimeType" IS NULL AND "storageKey" IS NULL)
         OR
@@ -92,6 +119,7 @@ run('NodesService PostgreSQL integration', () => {
       ALTER TABLE "RuntimeControl" ADD CONSTRAINT "runtime_control_singleton_ck" CHECK ("id" = 1);
       CREATE UNIQUE INDEX "node_active_sibling_name_uq" ON "Node" ("dataRoomId", "parentId", "normalizedName") WHERE "deletedAt" IS NULL AND "parentId" IS NOT NULL;
       CREATE INDEX "node_children_page_idx" ON "Node" ("dataRoomId", "parentId", "kind", "normalizedName", "id") WHERE "deletedAt" IS NULL;
+      CREATE UNIQUE INDEX "StorageCleanupJob_rootNodeId_key" ON "StorageCleanupJob" ("rootNodeId");
     `);
     await admin.query('INSERT INTO "UserProfile" ("id", "email") VALUES ($1, $2)', [
       ids.owner,
@@ -141,10 +169,12 @@ run('NodesService PostgreSQL integration', () => {
     service = new NodesService(prisma, accessPolicy, new RuntimeControlsService());
     listService = new NodesListService(prisma, accessPolicy);
     readService = new NodesReadService(prisma, accessPolicy);
+    deleteService = new DeleteService(prisma, accessPolicy);
   });
 
   beforeEach(async () => {
     const database = requirePrisma(prisma);
+    await database.storageCleanupJob.deleteMany({});
     await database.share.deleteMany({});
     await database.runtimeControl.update({
       where: { id: 1 },
@@ -397,6 +427,281 @@ run('NodesService PostgreSQL integration', () => {
     expect(siblings).toHaveLength(1);
   });
 
+  it('renames with revision compare-and-swap and maps sibling conflicts safely', async () => {
+    const nodes = requireService(service);
+    const database = requirePrisma(prisma);
+    await createFolderFixture(database, ids.renameTarget, ids.root, 'Rename target');
+    await createFolderFixture(database, ids.renamePeer, ids.root, 'Existing peer');
+
+    const renamed = nodeSummarySchema.parse(
+      await nodes.renameNode(owner, ids.renameTarget, {
+        name: 'Renamed target',
+        expectedRevision: 1,
+      }),
+    );
+    expect(renamed).toMatchObject({
+      id: ids.renameTarget,
+      name: 'Renamed target',
+      revision: 2,
+      accessRole: 'OWNER',
+    });
+    await expect(
+      nodes.renameNode(owner, ids.renameTarget, { name: 'Stale overwrite', expectedRevision: 1 }),
+    ).rejects.toMatchObject({ response: { error: { code: 'CONFLICT' } } });
+    await expect(
+      nodes.renameNode(owner, ids.renameTarget, { name: 'Existing peer', expectedRevision: 2 }),
+    ).rejects.toMatchObject({
+      response: {
+        error: { code: 'NAME_CONFLICT', details: { suggestedName: 'Existing peer (1)' } },
+      },
+    });
+
+    const after = await database.node.findUniqueOrThrow({ where: { id: ids.renameTarget } });
+    expect(after).toMatchObject({
+      name: 'Renamed target',
+      normalizedName: 'renamed target',
+      revision: 2,
+    });
+    await database.share.create({
+      data: {
+        id: ids.share,
+        targetNodeId: ids.renameTarget,
+        grantedByUserId: ids.owner,
+        principalType: 'USER',
+        role: 'VIEWER',
+        recipientUserId: ids.viewer,
+      },
+    });
+    await expect(
+      nodes.renameNode(viewer, ids.renameTarget, { name: 'Viewer attempt', expectedRevision: 2 }),
+    ).rejects.toMatchObject({ response: { error: { code: 'ACCESS_DENIED' } } });
+    await expect(
+      database.node.findUniqueOrThrow({ where: { id: ids.renameTarget } }),
+    ).resolves.toMatchObject({
+      name: 'Renamed target',
+      revision: 2,
+    });
+  });
+
+  it('allows one same-revision rename and one same-sibling-name winner under concurrency', async () => {
+    const nodes = requireService(service);
+    const database = requirePrisma(prisma);
+    await createFolderFixture(database, ids.renameRaceA, ids.root, 'Race A');
+    await createFolderFixture(database, ids.renameRaceB, ids.root, 'Race B');
+
+    const sameNode = await Promise.allSettled([
+      nodes.renameNode(owner, ids.renameRaceA, { name: 'First tab', expectedRevision: 1 }),
+      nodes.renameNode(owner, ids.renameRaceA, { name: 'Second tab', expectedRevision: 1 }),
+    ]);
+    expect(sameNode.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
+    expect(sameNode.filter(({ status }) => status === 'rejected')).toHaveLength(1);
+    expect(sameNode.find(({ status }) => status === 'rejected')).toMatchObject({
+      reason: { response: { error: { code: 'CONFLICT' } } },
+    });
+    await expect(
+      database.node.findUniqueOrThrow({ where: { id: ids.renameRaceA } }),
+    ).resolves.toMatchObject({
+      revision: 2,
+    });
+
+    const siblingRace = await Promise.allSettled([
+      nodes.renameNode(owner, ids.renameRaceA, { name: 'Collision', expectedRevision: 2 }),
+      nodes.renameNode(owner, ids.renameRaceB, { name: 'Collision', expectedRevision: 1 }),
+    ]);
+    expect(siblingRace.filter(({ status }) => status === 'fulfilled')).toHaveLength(1);
+    expect(siblingRace.find(({ status }) => status === 'rejected')).toMatchObject({
+      reason: { response: { error: { code: 'NAME_CONFLICT' } } },
+    });
+    await expect(
+      database.node.count({
+        where: {
+          dataRoomId: ids.room,
+          parentId: ids.root,
+          normalizedName: 'collision',
+          deletedAt: null,
+        },
+      }),
+    ).resolves.toBe(1);
+  });
+
+  it('returns exact delete impact and atomically tombstones, revokes, and enqueues once', async () => {
+    const deletion = requireDeleteService(deleteService);
+    const reader = requireReadService(readService);
+    const database = requirePrisma(prisma);
+    await seedDeleteTree(database);
+
+    const expectedImpact = {
+      rootNodeId: ids.deleteRoot,
+      folderCount: 1,
+      fileCount: 2,
+      totalBytes: '18',
+      activeShareCount: 2,
+    };
+    expect(deleteImpactSchema.parse(await deletion.getDeleteImpact(owner, ids.deleteRoot))).toEqual(
+      expectedImpact,
+    );
+    expect(deleteImpactSchema.parse(await deletion.deleteNode(owner, ids.deleteRoot))).toEqual(
+      expectedImpact,
+    );
+
+    const deleted = await database.node.findMany({
+      where: { id: { in: [ids.deleteRoot, ids.deleteFolder, ids.deleteFileA, ids.deleteFileB] } },
+      orderBy: { id: 'asc' },
+      select: { id: true, revision: true, deletedAt: true },
+    });
+    expect(deleted).toHaveLength(4);
+    expect(deleted.every(({ revision, deletedAt }) => revision === 2 && deletedAt !== null)).toBe(
+      true,
+    );
+    expect(new Set(deleted.map(({ deletedAt }) => deletedAt?.toISOString())).size).toBe(1);
+    await expect(
+      database.node.findUniqueOrThrow({ where: { id: ids.deleteOldBranch } }),
+    ).resolves.toMatchObject({
+      revision: 1,
+      deletedAt: new Date('2026-01-01T00:00:00.000Z'),
+    });
+    await expect(
+      database.node.findUniqueOrThrow({ where: { id: ids.deleteOutside } }),
+    ).resolves.toMatchObject({
+      revision: 1,
+      deletedAt: null,
+    });
+
+    const shares = await database.share.findMany({
+      orderBy: { id: 'asc' },
+      select: { id: true, revokedAt: true },
+    });
+    expect(
+      shares
+        .filter(({ id }) => [ids.deleteShareRoot, ids.deleteShareFile].includes(id))
+        .every(({ revokedAt }) => revokedAt !== null),
+    ).toBe(true);
+    expect(
+      shares
+        .filter(({ id }) => [ids.deleteShareOld, ids.deleteShareOutside].includes(id))
+        .every(({ revokedAt }) => revokedAt === null),
+    ).toBe(true);
+    await expect(
+      database.storageCleanupJob.count({ where: { rootNodeId: ids.deleteRoot } }),
+    ).resolves.toBe(1);
+    await expect(reader.getNode(owner, ids.deleteRoot)).rejects.toMatchObject({
+      response: { error: { code: 'ACCESS_DENIED' } },
+    });
+
+    const beforeRepeat = deleted.map(({ id, revision, deletedAt }) => ({
+      id,
+      revision,
+      deletedAt,
+    }));
+    expect(deleteImpactSchema.parse(await deletion.deleteNode(owner, ids.deleteRoot))).toEqual({
+      rootNodeId: ids.deleteRoot,
+      folderCount: 0,
+      fileCount: 0,
+      totalBytes: '0',
+      activeShareCount: 0,
+    });
+    const afterRepeat = await database.node.findMany({
+      where: { id: { in: [ids.deleteRoot, ids.deleteFolder, ids.deleteFileA, ids.deleteFileB] } },
+      orderBy: { id: 'asc' },
+      select: { id: true, revision: true, deletedAt: true },
+    });
+    expect(afterRepeat).toEqual(beforeRepeat);
+    await expect(
+      database.storageCleanupJob.count({ where: { rootNodeId: ids.deleteRoot } }),
+    ).resolves.toBe(1);
+    await expect(deletion.deleteNode(viewer, ids.deleteRoot)).rejects.toMatchObject({
+      response: { error: { code: 'ACCESS_DENIED' } },
+    });
+  });
+
+  it('rejects room-root deletion without a node, share, or cleanup-job write', async () => {
+    const deletion = requireDeleteService(deleteService);
+    const database = requirePrisma(prisma);
+    const before = await database.node.findUniqueOrThrow({ where: { id: ids.root } });
+
+    await expect(deletion.deleteNode(owner, ids.root)).rejects.toMatchObject({
+      response: { error: { code: 'CONFLICT' } },
+    });
+    await expect(database.node.findUniqueOrThrow({ where: { id: ids.root } })).resolves.toEqual(
+      before,
+    );
+    await expect(database.storageCleanupJob.count()).resolves.toBe(0);
+  });
+
+  it('keeps concurrent delete idempotent with one cleanup job and no partial state', async () => {
+    const deletion = requireDeleteService(deleteService);
+    const database = requirePrisma(prisma);
+    await createFolderFixture(database, ids.concurrentDeleteRoot, ids.root, 'Concurrent delete');
+    await createFileFixture(
+      database,
+      ids.concurrentDeleteFile,
+      ids.concurrentDeleteRoot,
+      'Concurrent.pdf',
+      'concurrent.pdf',
+    );
+
+    const results = await Promise.allSettled([
+      deletion.deleteNode(owner, ids.concurrentDeleteRoot),
+      deletion.deleteNode(owner, ids.concurrentDeleteRoot),
+    ]);
+    expect(results.filter(({ status }) => status === 'fulfilled')).toHaveLength(2);
+    expect(
+      results
+        .map((result) => {
+          if (result.status !== 'fulfilled') throw result.reason;
+          return deleteImpactSchema.parse(result.value).fileCount;
+        })
+        .toSorted(),
+    ).toEqual([0, 1]);
+    const nodes = await database.node.findMany({
+      where: { id: { in: [ids.concurrentDeleteRoot, ids.concurrentDeleteFile] } },
+      select: { revision: true, deletedAt: true },
+    });
+    expect(nodes.every(({ revision, deletedAt }) => revision === 2 && deletedAt !== null)).toBe(
+      true,
+    );
+    await expect(
+      database.storageCleanupJob.count({ where: { rootNodeId: ids.concurrentDeleteRoot } }),
+    ).resolves.toBe(1);
+  });
+
+  it('serializes create versus delete so returned impact matches the tombstoned subtree', async () => {
+    const nodes = requireService(service);
+    const deletion = requireDeleteService(deleteService);
+    const database = requirePrisma(prisma);
+    await createFolderFixture(database, ids.deleteRoot, ids.root, 'Delete versus create');
+    await createFolderFixture(database, ids.deleteFolder, ids.deleteRoot, 'Existing descendant');
+
+    const [deleteResult, createResult] = await Promise.allSettled([
+      deletion.deleteNode(owner, ids.deleteRoot),
+      nodes.createFolder(owner, { parentId: ids.deleteRoot, name: 'Racing descendant' }),
+    ]);
+    expect(deleteResult.status).toBe('fulfilled');
+    const impact = deleteImpactSchema.parse(
+      (deleteResult as PromiseFulfilledResult<unknown>).value,
+    );
+    const tombstonedDescendantFolders = await database.node.count({
+      where: {
+        dataRoomId: ids.room,
+        parentId: ids.deleteRoot,
+        kind: 'FOLDER',
+        deletedAt: { not: null },
+      },
+    });
+    expect(impact.folderCount).toBe(tombstonedDescendantFolders);
+    if (createResult.status === 'fulfilled') {
+      const created = await database.node.findUniqueOrThrow({
+        where: { id: createResult.value.id },
+      });
+      expect(created).toMatchObject({ revision: 2 });
+      expect(created.deletedAt).toBeInstanceOf(Date);
+    } else {
+      expect(createResult.reason).toMatchObject({
+        response: { error: { code: 'ACCESS_DENIED' } },
+      });
+    }
+  });
+
   it('serializes concurrent creators at the 50-folder quota boundary', async () => {
     const nodes = requireService(service);
     const database = requirePrisma(prisma);
@@ -562,6 +867,11 @@ function requireReadService(service: NodesReadService | undefined): NodesReadSer
   return service;
 }
 
+function requireDeleteService(service: DeleteService | undefined): DeleteService {
+  if (!service) throw new Error('PostgreSQL delete service is unavailable.');
+  return service;
+}
+
 function requireAdmin(admin: Client | undefined): Client {
   if (!admin) throw new Error('PostgreSQL integration admin client is unavailable.');
   return admin;
@@ -628,6 +938,104 @@ async function seedReadTree(prisma: PrismaClient): Promise<void> {
         kind: 'FOLDER',
         name: 'Outside',
         normalizedName: 'outside',
+      },
+    ],
+  });
+}
+
+async function seedDeleteTree(prisma: PrismaClient): Promise<void> {
+  await prisma.node.createMany({
+    data: [
+      {
+        id: ids.deleteRoot,
+        dataRoomId: ids.room,
+        parentId: ids.root,
+        kind: 'FOLDER',
+        name: 'Delete root',
+        normalizedName: 'delete root',
+      },
+      {
+        id: ids.deleteFolder,
+        dataRoomId: ids.room,
+        parentId: ids.deleteRoot,
+        kind: 'FOLDER',
+        name: 'Delete child',
+        normalizedName: 'delete child',
+      },
+      {
+        id: ids.deleteFileA,
+        dataRoomId: ids.room,
+        parentId: ids.deleteRoot,
+        kind: 'FILE',
+        name: 'Seven.pdf',
+        normalizedName: 'seven.pdf',
+        sizeBytes: 7n,
+        mimeType: 'application/pdf',
+        storageKey: 'tests/delete/seven.pdf',
+      },
+      {
+        id: ids.deleteFileB,
+        dataRoomId: ids.room,
+        parentId: ids.deleteFolder,
+        kind: 'FILE',
+        name: 'Eleven.pdf',
+        normalizedName: 'eleven.pdf',
+        sizeBytes: 11n,
+        mimeType: 'application/pdf',
+        storageKey: 'tests/delete/eleven.pdf',
+      },
+      {
+        id: ids.deleteOldBranch,
+        dataRoomId: ids.room,
+        parentId: ids.deleteRoot,
+        kind: 'FOLDER',
+        name: 'Already deleted',
+        normalizedName: 'already deleted',
+        deletedAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+      {
+        id: ids.deleteOutside,
+        dataRoomId: ids.room,
+        parentId: ids.root,
+        kind: 'FOLDER',
+        name: 'Outside delete',
+        normalizedName: 'outside delete',
+      },
+    ],
+  });
+  await prisma.share.createMany({
+    data: [
+      {
+        id: ids.deleteShareRoot,
+        targetNodeId: ids.deleteRoot,
+        grantedByUserId: ids.owner,
+        principalType: 'USER',
+        role: 'VIEWER',
+        recipientUserId: ids.viewer,
+      },
+      {
+        id: ids.deleteShareFile,
+        targetNodeId: ids.deleteFileB,
+        grantedByUserId: ids.owner,
+        principalType: 'USER',
+        role: 'VIEWER',
+        recipientUserId: ids.viewer,
+      },
+      {
+        id: ids.deleteShareOld,
+        targetNodeId: ids.deleteOldBranch,
+        grantedByUserId: ids.owner,
+        principalType: 'USER',
+        role: 'VIEWER',
+        recipientUserId: ids.viewer,
+      },
+      {
+        id: ids.deleteShareOutside,
+        targetNodeId: ids.deleteOutside,
+        grantedByUserId: ids.owner,
+        principalType: 'USER',
+        role: 'VIEWER',
+        recipientUserId: ids.viewer,
       },
     ],
   });

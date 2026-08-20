@@ -6,6 +6,7 @@ import {
   nodeBreadcrumbsResponseSchema,
   type ListNodeChildrenResponse,
   type NodeSummary,
+  type DeleteImpact,
 } from '@data-room/contracts';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import request from 'supertest';
@@ -18,6 +19,7 @@ import { NodesModule } from './nodes.module.js';
 import { NodesListService } from './nodes-list.service.js';
 import { NodesReadService } from './nodes-read.service.js';
 import { NodesService } from './nodes.service.js';
+import { DeleteService } from './delete.service.js';
 
 const principal = authenticatedPrincipal(
   '11111111-1111-4111-8111-111111111111',
@@ -42,6 +44,13 @@ const childrenResponse: ListNodeChildrenResponse = {
   pageInfo: { nextCursor: null, hasNextPage: false },
 };
 const breadcrumbsResponse = { items: [{ id: responseBody.id, name: responseBody.name }] };
+const impactResponse: DeleteImpact = {
+  rootNodeId: responseBody.id,
+  folderCount: 2,
+  fileCount: 3,
+  totalBytes: '42',
+  activeShareCount: 1,
+};
 
 describe('NodesController', () => {
   let app: INestApplication | undefined;
@@ -53,6 +62,9 @@ describe('NodesController', () => {
     const listChildren = vi.fn().mockResolvedValue(childrenResponse);
     const getNode = vi.fn().mockResolvedValue(responseBody);
     const getBreadcrumbs = vi.fn().mockResolvedValue(breadcrumbsResponse);
+    const renameNode = vi.fn().mockResolvedValue(responseBody);
+    const getDeleteImpact = vi.fn().mockResolvedValue(impactResponse);
+    const deleteNode = vi.fn().mockResolvedValue(impactResponse);
     const moduleBuilder = Test.createTestingModule({ imports: [NodesModule] })
       .overrideProvider(AUTH_CONFIG)
       .useValue({
@@ -63,7 +75,9 @@ describe('NodesController', () => {
       .overrideProvider(PrismaService)
       .useValue({})
       .overrideProvider(NodesService)
-      .useValue({ createFolder })
+      .useValue({ createFolder, renameNode })
+      .overrideProvider(DeleteService)
+      .useValue({ getDeleteImpact, deleteNode })
       .overrideProvider(NodesListService)
       .useValue({ listChildren })
       .overrideProvider(NodesReadService)
@@ -80,7 +94,15 @@ describe('NodesController', () => {
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('v1');
     await app.init();
-    return { createFolder, listChildren, getNode, getBreadcrumbs };
+    return {
+      createFolder,
+      listChildren,
+      getNode,
+      getBreadcrumbs,
+      renameNode,
+      getDeleteImpact,
+      deleteNode,
+    };
   }
 
   it('creates a folder through the guarded normalized route', async () => {
@@ -152,6 +174,52 @@ describe('NodesController', () => {
       breadcrumbsResponse,
     );
     expect(getBreadcrumbs).toHaveBeenCalledWith(principal, responseBody.id);
+  });
+
+  it('routes owner node mutations with validated inputs', async () => {
+    const { renameNode, getDeleteImpact, deleteNode } = await createApp();
+    await apiRequest()
+      .patch(`/v1/nodes/${responseBody.id}/name`)
+      .send({ name: 'Renamed', expectedRevision: 1 })
+      .expect(200);
+    expect(renameNode).toHaveBeenCalledWith(principal, responseBody.id, {
+      name: 'Renamed',
+      expectedRevision: 1,
+    });
+    await apiRequest().get(`/v1/nodes/${responseBody.id}/delete-impact`).expect(200);
+    expect(getDeleteImpact).toHaveBeenCalledWith(principal, responseBody.id);
+    await apiRequest().delete(`/v1/nodes/${responseBody.id}`).expect(200);
+    expect(deleteNode).toHaveBeenCalledWith(principal, responseBody.id);
+  });
+
+  it('rejects malformed mutation inputs before service invocation', async () => {
+    const { renameNode, getDeleteImpact, deleteNode } = await createApp();
+    await apiRequest()
+      .patch(`/v1/nodes/${responseBody.id}/name`)
+      .send({ name: 'Renamed', expectedRevision: 0 })
+      .expect(400);
+    await apiRequest()
+      .patch('/v1/nodes/not-a-uuid/name')
+      .send({ name: 'Renamed', expectedRevision: 1 })
+      .expect(400);
+    await apiRequest().get('/v1/nodes/not-a-uuid/delete-impact').expect(400);
+    await apiRequest().delete('/v1/nodes/not-a-uuid').expect(400);
+    expect(renameNode).not.toHaveBeenCalled();
+    expect(getDeleteImpact).not.toHaveBeenCalled();
+    expect(deleteNode).not.toHaveBeenCalled();
+  });
+
+  it('rejects unauthenticated mutations through the real guard', async () => {
+    const { renameNode, getDeleteImpact, deleteNode } = await createApp({ useRealAuth: true });
+    await apiRequest()
+      .patch(`/v1/nodes/${responseBody.id}/name`)
+      .send({ name: 'Renamed', expectedRevision: 1 })
+      .expect(401);
+    await apiRequest().get(`/v1/nodes/${responseBody.id}/delete-impact`).expect(401);
+    await apiRequest().delete(`/v1/nodes/${responseBody.id}`).expect(401);
+    expect(renameNode).not.toHaveBeenCalled();
+    expect(getDeleteImpact).not.toHaveBeenCalled();
+    expect(deleteNode).not.toHaveBeenCalled();
   });
 
   it('rejects malformed read UUIDs before service invocation', async () => {

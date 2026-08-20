@@ -1,10 +1,22 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import {
   createFolderRequestSchema,
   paginationQuerySchema,
   uuidSchema,
   type CreateFolderRequest,
   type PaginationQuery,
+  renameNodeRequestSchema,
+  type RenameNodeRequest,
 } from '@data-room/contracts';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { Principal } from '../auth/principal.decorator.js';
@@ -13,6 +25,7 @@ import { ZodValidationPipe } from '../common/zod-validation.pipe.js';
 import { NodesService } from './nodes.service.js';
 import { NodesListService } from './nodes-list.service.js';
 import { NodesReadService } from './nodes-read.service.js';
+import { DeleteService } from './delete.service.js';
 
 @Controller()
 @UseGuards(JwtAuthGuard)
@@ -21,6 +34,7 @@ export class NodesController {
     private readonly nodesService: NodesService,
     private readonly nodesListService: NodesListService,
     private readonly nodesReadService: NodesReadService,
+    private readonly deleteService: DeleteService,
   ) {}
 
   @Post('folders')
@@ -54,5 +68,30 @@ export class NodesController {
     @Param('nodeId', new ZodValidationPipe(uuidSchema)) nodeId: string,
   ) {
     return this.nodesReadService.getBreadcrumbs(principal, nodeId);
+  }
+
+  @Patch('nodes/:nodeId/name')
+  renameNode(
+    @Principal() principal: AuthenticatedPrincipal,
+    @Param('nodeId', new ZodValidationPipe(uuidSchema)) nodeId: string,
+    @Body(new ZodValidationPipe(renameNodeRequestSchema)) body: RenameNodeRequest,
+  ) {
+    return this.nodesService.renameNode(principal, nodeId, body);
+  }
+
+  @Get('nodes/:nodeId/delete-impact')
+  getDeleteImpact(
+    @Principal() principal: AuthenticatedPrincipal,
+    @Param('nodeId', new ZodValidationPipe(uuidSchema)) nodeId: string,
+  ) {
+    return this.deleteService.getDeleteImpact(principal, nodeId);
+  }
+
+  @Delete('nodes/:nodeId')
+  deleteNode(
+    @Principal() principal: AuthenticatedPrincipal,
+    @Param('nodeId', new ZodValidationPipe(uuidSchema)) nodeId: string,
+  ) {
+    return this.deleteService.deleteNode(principal, nodeId);
   }
 }
