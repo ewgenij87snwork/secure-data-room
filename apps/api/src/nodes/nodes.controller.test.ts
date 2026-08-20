@@ -51,6 +51,10 @@ const impactResponse: DeleteImpact = {
   totalBytes: '42',
   activeShareCount: 1,
 };
+const viewUrlResponse = {
+  url: 'https://storage.example/signed',
+  expiresAt: '2026-01-01T00:01:00.000Z',
+};
 
 describe('NodesController', () => {
   let app: INestApplication | undefined;
@@ -63,6 +67,8 @@ describe('NodesController', () => {
     const getNode = vi.fn().mockResolvedValue(responseBody);
     const getBreadcrumbs = vi.fn().mockResolvedValue(breadcrumbsResponse);
     const renameNode = vi.fn().mockResolvedValue(responseBody);
+    const moveFile = vi.fn().mockResolvedValue(responseBody);
+    const createViewUrl = vi.fn().mockResolvedValue(viewUrlResponse);
     const getDeleteImpact = vi.fn().mockResolvedValue(impactResponse);
     const deleteNode = vi.fn().mockResolvedValue(impactResponse);
     const moduleBuilder = Test.createTestingModule({ imports: [NodesModule] })
@@ -75,7 +81,7 @@ describe('NodesController', () => {
       .overrideProvider(PrismaService)
       .useValue({})
       .overrideProvider(NodesService)
-      .useValue({ createFolder, renameNode })
+      .useValue({ createFolder, renameNode, moveFile, createViewUrl })
       .overrideProvider(DeleteService)
       .useValue({ getDeleteImpact, deleteNode })
       .overrideProvider(NodesListService)
@@ -100,6 +106,8 @@ describe('NodesController', () => {
       getNode,
       getBreadcrumbs,
       renameNode,
+      moveFile,
+      createViewUrl,
       getDeleteImpact,
       deleteNode,
     };
@@ -190,6 +198,39 @@ describe('NodesController', () => {
     expect(getDeleteImpact).toHaveBeenCalledWith(principal, responseBody.id);
     await apiRequest().delete(`/v1/nodes/${responseBody.id}`).expect(200);
     expect(deleteNode).toHaveBeenCalledWith(principal, responseBody.id);
+  });
+
+  it('delegates the file move and view URL contracts on POST files routes', async () => {
+    const { moveFile, createViewUrl } = await createApp();
+    await apiRequest()
+      .post(`/v1/files/${responseBody.id}/move`)
+      .send({ targetFolderId: responseBody.parentId, expectedRevision: 1 })
+      .expect(201);
+    expect(moveFile).toHaveBeenCalledWith(principal, responseBody.id, {
+      targetFolderId: responseBody.parentId,
+      expectedRevision: 1,
+    });
+    await apiRequest().post(`/v1/files/${responseBody.id}/view-url`).expect(201);
+    expect(createViewUrl).toHaveBeenCalledWith(principal, responseBody.id);
+  });
+
+  it('rejects malformed file route UUIDs and bodies before delegation', async () => {
+    const { moveFile, createViewUrl } = await createApp();
+    await apiRequest()
+      .post('/v1/files/not-a-uuid/move')
+      .send({ targetFolderId: responseBody.parentId, expectedRevision: 1 })
+      .expect(400);
+    await apiRequest()
+      .post(`/v1/files/${responseBody.id}/move`)
+      .send({ targetFolderId: 'not-a-uuid', expectedRevision: 1 })
+      .expect(400);
+    await apiRequest()
+      .post(`/v1/files/${responseBody.id}/move`)
+      .send({ targetFolderId: responseBody.parentId, expectedRevision: 0 })
+      .expect(400);
+    await apiRequest().post('/v1/files/not-a-uuid/view-url').expect(400);
+    expect(moveFile).not.toHaveBeenCalled();
+    expect(createViewUrl).not.toHaveBeenCalled();
   });
 
   it('rejects malformed mutation inputs before service invocation', async () => {

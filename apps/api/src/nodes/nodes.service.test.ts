@@ -320,3 +320,326 @@ describe('NodesService rename', () => {
     expect(h.database.$transaction).not.toHaveBeenCalled();
   });
 });
+
+describe('NodesService file operations', () => {
+  const fileAccess: OwnedNode = {
+    nodeId,
+    dataRoomId: roomId,
+    parentId,
+    kind: 'FILE',
+    accessRole: 'OWNER',
+    accessRootNodeId: parentId,
+  };
+  const fileRow = {
+    ...createdNode({ kind: 'FILE', name: 'Agreement.pdf', revision: 1 }),
+    sizeBytes: BigInt(10),
+    mimeType: 'application/pdf' as const,
+    storageKey: 'rooms/room/objects/file',
+    deletedAt: null,
+    createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    updatedAt: new Date('2026-01-01T00:00:00.000Z'),
+  };
+
+  it('moves an active file within the same room without changing its storage key', async () => {
+    const moved = { ...fileRow, parentId: parentId, revision: 2 };
+    const transaction = {
+      $queryRaw: vi
+        .fn()
+        .mockResolvedValue([{ id: parentId, dataRoomId: roomId, kind: 'FOLDER', deletedAt: null }]),
+      node: {
+        findUnique: vi.fn().mockResolvedValueOnce(fileRow).mockResolvedValueOnce(moved),
+        updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+      },
+    };
+    const database = {
+      node: { findUnique: vi.fn().mockResolvedValue(fileRow) },
+      $transaction: vi.fn((callback: (tx: typeof transaction) => Promise<unknown>) =>
+        callback(transaction),
+      ),
+    };
+    const policy = { assertCanManageNode: vi.fn().mockResolvedValue(fileAccess) };
+    const service = new NodesService(
+      database as never,
+      policy as never,
+      new RuntimeControlsService(),
+    );
+
+    await expect(
+      service.moveFile(principal, nodeId, { targetFolderId: parentId, expectedRevision: 1 }),
+    ).resolves.toMatchObject({ revision: 2, parentId });
+    expect(transaction.node.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { parentId, revision: { increment: 1 } } }),
+    );
+    expect(fileRow.storageKey).toBe('rooms/room/objects/file');
+  });
+
+  it('rejects an active file as a move target without mutating the source', async () => {
+    const transaction = {
+      $queryRaw: vi
+        .fn()
+        .mockResolvedValue([{ id: parentId, dataRoomId: roomId, kind: 'FILE', deletedAt: null }]),
+      node: {
+        findUnique: vi.fn().mockResolvedValue(fileRow),
+        updateMany: vi.fn(),
+      },
+    };
+    const database = {
+      node: { findUnique: vi.fn().mockResolvedValue(fileRow) },
+      $transaction: vi.fn((callback: (tx: typeof transaction) => Promise<unknown>) =>
+        callback(transaction),
+      ),
+    };
+    const policy = { assertCanManageNode: vi.fn().mockResolvedValue(fileAccess) };
+    const service = new NodesService(
+      database as never,
+      policy as never,
+      new RuntimeControlsService(),
+    );
+
+    await expect(
+      service.moveFile(principal, nodeId, { targetFolderId: parentId, expectedRevision: 1 }),
+    ).rejects.toMatchObject({ response: { error: { code: 'ACCESS_DENIED' } } });
+    expect(transaction.node.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('rejects moving a file into itself without mutating the source', async () => {
+    const transaction = {
+      $queryRaw: vi
+        .fn()
+        .mockResolvedValue([{ id: nodeId, dataRoomId: roomId, kind: 'FILE', deletedAt: null }]),
+      node: {
+        findUnique: vi.fn().mockResolvedValue(fileRow),
+        updateMany: vi.fn(),
+      },
+    };
+    const database = {
+      node: { findUnique: vi.fn().mockResolvedValue(fileRow) },
+      $transaction: vi.fn((callback: (tx: typeof transaction) => Promise<unknown>) =>
+        callback(transaction),
+      ),
+    };
+    const policy = { assertCanManageNode: vi.fn().mockResolvedValue(fileAccess) };
+    const service = new NodesService(
+      database as never,
+      policy as never,
+      new RuntimeControlsService(),
+    );
+
+    await expect(
+      service.moveFile(principal, nodeId, { targetFolderId: nodeId, expectedRevision: 1 }),
+    ).rejects.toMatchObject({ response: { error: { code: 'ACCESS_DENIED' } } });
+    expect(transaction.node.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('maps a source persistence read failure to INTERNAL_ERROR after policy succeeds', async () => {
+    const failure = new Error('database unavailable');
+    const database = {
+      node: { findUnique: vi.fn().mockRejectedValue(failure) },
+      $transaction: vi.fn(),
+    };
+    const policy = { assertCanManageNode: vi.fn().mockResolvedValue(fileAccess) };
+    const service = new NodesService(
+      database as never,
+      policy as never,
+      new RuntimeControlsService(),
+    );
+
+    await expect(
+      service.moveFile(principal, nodeId, { targetFolderId: parentId, expectedRevision: 1 }),
+    ).rejects.toMatchObject({
+      response: { error: { code: 'INTERNAL_ERROR', message: 'File move failed.' } },
+    });
+    expect(database.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('issues a 60-second URL only after read policy', async () => {
+    const storage = { createSignedReadUrl: vi.fn().mockResolvedValue('signed-url') };
+    const database = { node: { findUnique: vi.fn().mockResolvedValue(fileRow) } };
+    const policy = {
+      assertCanReadNode: vi.fn().mockResolvedValue({ ...fileAccess, accessRole: 'VIEWER' }),
+    };
+    const service = new NodesService(
+      database as never,
+      policy as never,
+      new RuntimeControlsService(),
+      storage as never,
+    );
+
+    await expect(service.createViewUrl(principal, nodeId)).resolves.toMatchObject({
+      url: 'signed-url',
+      expiresAt: expect.any(String) as string,
+    });
+    expect(storage.createSignedReadUrl).toHaveBeenCalledWith(fileRow.storageKey, 60);
+  });
+
+  it('maps a storage signing failure to INTERNAL_ERROR without leaking the provider error', async () => {
+    const providerFailure = new Error('provider credentials or endpoint details');
+    const storage = { createSignedReadUrl: vi.fn().mockRejectedValue(providerFailure) };
+    const database = { node: { findUnique: vi.fn().mockResolvedValue(fileRow) } };
+    const policy = {
+      assertCanReadNode: vi.fn().mockResolvedValue({ ...fileAccess, accessRole: 'VIEWER' }),
+    };
+    const service = new NodesService(
+      database as never,
+      policy as never,
+      new RuntimeControlsService(),
+      storage as never,
+    );
+
+    await expect(service.createViewUrl(principal, nodeId)).rejects.toMatchObject({
+      response: { error: { code: 'INTERNAL_ERROR', message: 'Viewing failed.' } },
+    });
+  });
+
+  it('does not call storage when read policy denies a revoked or deleted reader', async () => {
+    const storage = { createSignedReadUrl: vi.fn() };
+    const database = { node: { findUnique: vi.fn().mockResolvedValue(fileRow) } };
+    const policy = {
+      assertCanReadNode: vi
+        .fn()
+        .mockRejectedValue(
+          new ApiException('ACCESS_DENIED', HttpStatus.FORBIDDEN, 'Access denied.'),
+        ),
+    };
+    const service = new NodesService(
+      database as never,
+      policy as never,
+      new RuntimeControlsService(),
+      storage as never,
+    );
+
+    await expect(service.createViewUrl(principal, nodeId)).rejects.toMatchObject({
+      response: { error: { code: 'ACCESS_DENIED' } },
+    });
+    expect(database.node.findUnique).not.toHaveBeenCalled();
+    expect(storage.createSignedReadUrl).not.toHaveBeenCalled();
+  });
+
+  it('does not call storage for an active non-file node', async () => {
+    const storage = { createSignedReadUrl: vi.fn() };
+    const database = {
+      node: { findUnique: vi.fn().mockResolvedValue({ ...fileRow, kind: 'FOLDER' }) },
+    };
+    const policy = {
+      assertCanReadNode: vi.fn().mockResolvedValue({ ...fileAccess, kind: 'FOLDER' }),
+    };
+    const service = new NodesService(
+      database as never,
+      policy as never,
+      new RuntimeControlsService(),
+      storage as never,
+    );
+
+    await expect(service.createViewUrl(principal, nodeId)).rejects.toMatchObject({
+      response: { error: { code: 'INVALID_FILE' } },
+    });
+    expect(storage.createSignedReadUrl).not.toHaveBeenCalled();
+  });
+
+  it('maps a view persistence read failure to INTERNAL_ERROR after policy succeeds', async () => {
+    const database = {
+      node: { findUnique: vi.fn().mockRejectedValue(new Error('database unavailable')) },
+    };
+    const policy = {
+      assertCanReadNode: vi.fn().mockResolvedValue({ ...fileAccess, accessRole: 'VIEWER' }),
+    };
+    const service = new NodesService(
+      database as never,
+      policy as never,
+      new RuntimeControlsService(),
+      { createSignedReadUrl: vi.fn() } as never,
+    );
+
+    await expect(service.createViewUrl(principal, nodeId)).rejects.toMatchObject({
+      response: { error: { code: 'INTERNAL_ERROR', message: 'Viewing failed.' } },
+    });
+  });
+
+  it('keeps a max-length PDF conflict suggestion within 120 characters', async () => {
+    const name = `${'a'.repeat(116)}.pdf`;
+    const transaction = {
+      $queryRaw: vi
+        .fn()
+        .mockResolvedValue([{ id: parentId, dataRoomId: roomId, kind: 'FOLDER', deletedAt: null }]),
+      node: {
+        findUnique: vi.fn().mockResolvedValue(fileRow),
+        updateMany: vi
+          .fn()
+          .mockRejectedValue(Object.assign(new Error('conflict'), { code: 'P2002' })),
+      },
+    };
+    const database = {
+      node: {
+        findUnique: vi.fn().mockResolvedValue({ ...fileRow, name }),
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      $transaction: vi.fn((callback: (tx: typeof transaction) => Promise<unknown>) =>
+        callback(transaction),
+      ),
+    };
+    const policy = { assertCanManageNode: vi.fn().mockResolvedValue({ ...fileAccess, name }) };
+    const service = new NodesService(
+      database as never,
+      policy as never,
+      new RuntimeControlsService(),
+    );
+
+    const error: unknown = await service
+      .moveFile(principal, nodeId, { targetFolderId: parentId, expectedRevision: 1 })
+      .catch((cause: unknown) => cause);
+
+    expect(error).toMatchObject({
+      response: {
+        error: {
+          code: 'NAME_CONFLICT',
+          details: { suggestedName: `${'a'.repeat(112)} (1).pdf` },
+        },
+      },
+    });
+    expect(`${'a'.repeat(112)} (1).pdf`).toHaveLength(120);
+  });
+
+  it('does not mutate when a shared viewer attempts to move a file', async () => {
+    const database = {
+      node: { findUnique: vi.fn() },
+      $transaction: vi.fn(),
+    };
+    const policy = {
+      assertCanManageNode: vi
+        .fn()
+        .mockRejectedValue(
+          new ApiException('ACCESS_DENIED', HttpStatus.FORBIDDEN, 'Access denied.'),
+        ),
+    };
+    const service = new NodesService(
+      database as never,
+      policy as never,
+      new RuntimeControlsService(),
+    );
+
+    await expect(
+      service.moveFile(principal, nodeId, { targetFolderId: parentId, expectedRevision: 1 }),
+    ).rejects.toMatchObject({ response: { error: { code: 'ACCESS_DENIED' } } });
+    expect(database.node.findUnique).not.toHaveBeenCalled();
+    expect(database.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects a non-file mutation before opening a transaction', async () => {
+    const database = {
+      node: { findUnique: vi.fn() },
+      $transaction: vi.fn(),
+    };
+    const policy = { assertCanManageNode: vi.fn().mockResolvedValue(ownedRenameNode) };
+    const service = new NodesService(
+      database as never,
+      policy as never,
+      new RuntimeControlsService(),
+    );
+
+    await expect(
+      service.moveFile(principal, nodeId, { targetFolderId: parentId, expectedRevision: 1 }),
+    ).rejects.toMatchObject({ response: { error: { code: 'INVALID_FILE' } } });
+    expect(database.node.findUnique).not.toHaveBeenCalled();
+    expect(database.$transaction).not.toHaveBeenCalled();
+  });
+});

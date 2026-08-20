@@ -70,6 +70,7 @@ run('NodesService PostgreSQL integration', () => {
   let pool: Pool | undefined;
   let prisma: PrismaClient | undefined;
   let service: NodesService | undefined;
+  const signedReadCalls: { storageKey: string; ttlSeconds: number }[] = [];
   let listService: NodesListService | undefined;
   let readService: NodesReadService | undefined;
   let deleteService: DeleteService | undefined;
@@ -166,7 +167,12 @@ run('NodesService PostgreSQL integration', () => {
       adapter: new PrismaPg(pool, { schema, disposeExternalPool: false }),
     });
     const accessPolicy = new AccessPolicyService(prisma);
-    service = new NodesService(prisma, accessPolicy, new RuntimeControlsService());
+    service = new NodesService(prisma, accessPolicy, new RuntimeControlsService(), {
+      createSignedReadUrl: (storageKey: string, ttlSeconds: number) => {
+        signedReadCalls.push({ storageKey, ttlSeconds });
+        return 'signed-url';
+      },
+    } as never);
     listService = new NodesListService(prisma, accessPolicy);
     readService = new NodesReadService(prisma, accessPolicy);
     deleteService = new DeleteService(prisma, accessPolicy);
@@ -183,6 +189,17 @@ run('NodesService PostgreSQL integration', () => {
     await database.node.deleteMany({
       where: { id: { notIn: [ids.root, ids.child, ids.file] } },
     });
+    await database.node.update({
+      where: { id: ids.file },
+      data: {
+        parentId: ids.root,
+        name: 'File.pdf',
+        normalizedName: 'file.pdf',
+        revision: 1,
+        deletedAt: null,
+      },
+    });
+    signedReadCalls.length = 0;
     await database.dataRoom.deleteMany({ where: { id: ids.foreignRoom } });
   });
 
@@ -481,6 +498,98 @@ run('NodesService PostgreSQL integration', () => {
       name: 'Renamed target',
       revision: 2,
     });
+  });
+
+  it('moves an active file within the room without changing its storage key', async () => {
+    const nodes = requireService(service);
+    const database = requirePrisma(prisma);
+    const before = await database.node.findUniqueOrThrow({ where: { id: ids.file } });
+    const moved = nodeSummarySchema.parse(
+      await nodes.moveFile(owner, ids.file, { targetFolderId: ids.child, expectedRevision: 1 }),
+    );
+    expect(moved).toMatchObject({ id: ids.file, parentId: ids.child, revision: 2 });
+    const after = await database.node.findUniqueOrThrow({ where: { id: ids.file } });
+    expect(after).toMatchObject({
+      parentId: ids.child,
+      revision: 2,
+      storageKey: before.storageKey,
+    });
+  });
+
+  it('denies cross-room and deleted move targets without changing the file', async () => {
+    const nodes = requireService(service);
+    const database = requirePrisma(prisma);
+    const client = requireAdmin(admin);
+    await seedForeignRoom(client);
+    await database.node.create({
+      data: {
+        id: ids.deletedTarget,
+        dataRoomId: ids.room,
+        parentId: ids.root,
+        kind: 'FOLDER',
+        name: 'Deleted target',
+        normalizedName: 'deleted target',
+        deletedAt: new Date('2026-01-01T00:00:00.000Z'),
+      },
+    });
+    for (const targetFolderId of [ids.foreignChildA, ids.deletedTarget]) {
+      await expect(
+        nodes.moveFile(owner, ids.file, { targetFolderId, expectedRevision: 1 }),
+      ).rejects.toMatchObject({ response: { error: { code: 'ACCESS_DENIED' } } });
+    }
+    await expect(
+      database.node.findUniqueOrThrow({ where: { id: ids.file } }),
+    ).resolves.toMatchObject({
+      parentId: ids.root,
+      revision: 1,
+    });
+  });
+
+  it('returns a suggestion on move name conflict without overwriting the target', async () => {
+    const nodes = requireService(service);
+    const database = requirePrisma(prisma);
+    await createFileFixture(database, ids.beforeCursor, ids.child, 'File.pdf', 'file.pdf');
+    await expect(
+      nodes.moveFile(owner, ids.file, { targetFolderId: ids.child, expectedRevision: 1 }),
+    ).rejects.toMatchObject({
+      response: { error: { code: 'NAME_CONFLICT', details: { suggestedName: 'File (1).pdf' } } },
+    });
+    await expect(
+      database.node.findUniqueOrThrow({ where: { id: ids.file } }),
+    ).resolves.toMatchObject({
+      parentId: ids.root,
+      revision: 1,
+      storageKey: 'tests/file.pdf',
+    });
+  });
+
+  it('creates a 60-second URL for a shared viewer and never for revoked or deleted access', async () => {
+    const nodes = requireService(service);
+    const database = requirePrisma(prisma);
+    await database.share.create({
+      data: {
+        id: ids.share,
+        targetNodeId: ids.file,
+        grantedByUserId: ids.owner,
+        principalType: 'USER',
+        role: 'VIEWER',
+        recipientUserId: ids.viewer,
+      },
+    });
+    await expect(nodes.createViewUrl(viewer, ids.file)).resolves.toMatchObject({
+      url: 'signed-url',
+      expiresAt: expect.any(String) as string,
+    });
+    expect(signedReadCalls).toEqual([{ storageKey: 'tests/file.pdf', ttlSeconds: 60 }]);
+    await database.share.update({ where: { id: ids.share }, data: { revokedAt: new Date() } });
+    await expect(nodes.createViewUrl(viewer, ids.file)).rejects.toMatchObject({
+      response: { error: { code: 'ACCESS_DENIED' } },
+    });
+    await database.node.update({ where: { id: ids.file }, data: { deletedAt: new Date() } });
+    await expect(nodes.createViewUrl(owner, ids.file)).rejects.toMatchObject({
+      response: { error: { code: 'ACCESS_DENIED' } },
+    });
+    expect(signedReadCalls).toHaveLength(1);
   });
 
   it('allows one same-revision rename and one same-sibling-name winner under concurrency', async () => {

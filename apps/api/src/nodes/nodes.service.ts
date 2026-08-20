@@ -1,5 +1,11 @@
-import { HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
-import type { CreateFolderRequest, NodeSummary, RenameNodeRequest } from '@data-room/contracts';
+import { HttpException, HttpStatus, Inject, Injectable, Optional } from '@nestjs/common';
+import {
+  moveFileRequestSchema,
+  type CreateFolderRequest,
+  type NodeSummary,
+  type RenameNodeRequest,
+} from '@data-room/contracts';
+import { z } from 'zod';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../database/prisma.service.js';
 import type { AuthenticatedPrincipal } from '../auth/principal.js';
@@ -16,6 +22,10 @@ import {
 import { ApiException } from '../common/api-exception.js';
 import { normalizedNodeName, suffixedNodeName } from './node-name.service.js';
 import { toNodeSummary, type NodeRow } from './node-summary.js';
+import { StorageService } from '../storage/storage.service.js';
+
+export type MoveFileRequest = z.infer<typeof moveFileRequestSchema>;
+export type ViewUrlResponse = Readonly<{ url: string; expiresAt: string }>;
 
 interface ParentProof {
   dataRoomId: string;
@@ -24,7 +34,7 @@ interface ParentProof {
   ownerId: string;
 }
 
-type PersistedNodeRow = NodeRow & Readonly<{ deletedAt: Date | null }>;
+type PersistedNodeRow = NodeRow & Readonly<{ deletedAt: Date | null; storageKey?: string | null }>;
 
 export interface NodesTransaction extends RuntimeControlsTransaction {
   $queryRaw<T>(query: Prisma.Sql): Promise<T>;
@@ -52,9 +62,10 @@ export interface NodesTransaction extends RuntimeControlsTransaction {
         deletedAt: null;
       };
       data: {
-        name: string;
-        normalizedName: string;
+        name?: string;
+        normalizedName?: string;
         revision: { increment: 1 };
+        parentId?: string;
       };
     }): Promise<{ count: number }>;
     findUnique(args: { where: { id: string } }): Promise<PersistedNodeRow | null>;
@@ -68,6 +79,7 @@ export interface NodesDatabase {
       where: { dataRoomId: string; parentId: string | null; deletedAt: null };
       select: { normalizedName: true };
     }): Promise<{ normalizedName: string }[]>;
+    findUnique(args: { where: { id: string } }): Promise<PersistedNodeRow | null>;
   };
 }
 
@@ -77,6 +89,7 @@ export class NodesService {
     @Inject(PrismaService) private readonly prisma: NodesDatabase,
     private readonly accessPolicy: AccessPolicyService,
     private readonly runtimeControls: RuntimeControlsService,
+    @Optional() private readonly storage?: StorageService,
   ) {}
 
   async createFolder(
@@ -134,6 +147,77 @@ export class NodesService {
     }
   }
 
+  async moveFile(
+    principal: AuthenticatedPrincipal,
+    nodeId: string,
+    input: MoveFileRequest,
+  ): Promise<NodeSummary> {
+    const access = await this.accessPolicy.assertCanManageNode(principal, nodeId);
+    if (access.kind !== 'FILE') throw invalidFile();
+    let source: PersistedNodeRow | null;
+    try {
+      source = await this.prisma.node.findUnique({ where: { id: nodeId } });
+    } catch {
+      throw persistenceFailure('File move failed.');
+    }
+    if (source?.deletedAt !== null) throw resourceGone();
+    try {
+      return await this.prisma.$transaction((transaction) =>
+        moveInTransaction(transaction, access, input),
+      );
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      if (isUniqueConflict(error)) {
+        throw await this.nameConflict({
+          access,
+          name: source.name,
+          parentId: input.targetFolderId,
+          preserveExtension: true,
+          failureMessage: 'File move failed.',
+        });
+      }
+      throw new ApiException(
+        'INTERNAL_ERROR',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'File move failed.',
+      );
+    }
+  }
+
+  async createViewUrl(principal: AuthenticatedPrincipal, nodeId: string): Promise<ViewUrlResponse> {
+    const access = await this.accessPolicy.assertCanReadNode(principal, nodeId);
+    let node: PersistedNodeRow | null;
+    try {
+      node = await this.prisma.node.findUnique({ where: { id: nodeId } });
+    } catch {
+      throw persistenceFailure('Viewing failed.');
+    }
+    if (
+      node?.deletedAt !== null ||
+      node.dataRoomId !== access.dataRoomId ||
+      node.kind !== 'FILE' ||
+      typeof node.storageKey !== 'string'
+    ) {
+      throw invalidFile();
+    }
+    const storage = this.storage;
+    if (!storage) {
+      throw new ApiException(
+        'INTERNAL_ERROR',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+        'Viewing is unavailable.',
+      );
+    }
+    const ttlSeconds = 60;
+    let url: string;
+    try {
+      url = await storage.createSignedReadUrl(node.storageKey, ttlSeconds);
+    } catch {
+      throw persistenceFailure('Viewing failed.');
+    }
+    return { url, expiresAt: new Date(Date.now() + ttlSeconds * 1000).toISOString() };
+  }
+
   private async createInTransaction(
     tx: NodesTransaction,
     principal: AuthenticatedPrincipal,
@@ -179,6 +263,7 @@ export class NodesService {
     access: OwnedNode;
     name: string;
     parentId: string | null;
+    preserveExtension?: boolean;
     failureMessage: string;
   }): Promise<ApiException> {
     let siblings: { normalizedName: string }[];
@@ -199,9 +284,13 @@ export class NodesService {
       );
     }
     const names = new Set(siblings.map((sibling) => sibling.normalizedName));
-    let suggestedName = suffixedNodeName(input.name, 1);
+    const suffixName = (attempt: number) =>
+      input.preserveExtension
+        ? suffixedFileName(input.name, attempt)
+        : suffixedNodeName(input.name, attempt);
+    let suggestedName = suffixName(1);
     for (let attempt = 1; attempt <= 100; attempt += 1) {
-      const candidate = suffixedNodeName(input.name, attempt);
+      const candidate = suffixName(attempt);
       if (!names.has(normalizedNodeName(candidate))) {
         suggestedName = candidate;
         break;
@@ -214,6 +303,18 @@ export class NodesService {
       { suggestedName },
     );
   }
+}
+
+function suffixedFileName(name: string, attempt: number): string {
+  const extensionIndex = name.lastIndexOf('.');
+  if (extensionIndex <= 0 || extensionIndex === name.length - 1) {
+    return suffixedNodeName(name, attempt);
+  }
+  const base = name.slice(0, extensionIndex);
+  const extension = name.slice(extensionIndex);
+  const suffix = ` (${attempt})`;
+  const stemLength = Math.max(1, 120 - suffix.length - extension.length);
+  return `${base.slice(0, stemLength)}${suffix}${extension}`;
 }
 
 async function renameInTransaction(
@@ -242,6 +343,65 @@ async function renameInTransaction(
     throw new ApiException('CONFLICT', HttpStatus.CONFLICT, 'The node changed.');
   }
   throw new ApiException('RESOURCE_GONE', HttpStatus.GONE, 'The node is no longer available.');
+}
+
+async function moveInTransaction(
+  transaction: NodesTransaction,
+  access: OwnedNode,
+  input: MoveFileRequest,
+): Promise<NodeSummary> {
+  const targets = await transaction.$queryRaw<
+    { id: string; dataRoomId: string; kind: NodeRow['kind']; deletedAt: Date | null }[]
+  >(Prisma.sql`
+    SELECT "id", "dataRoomId", "kind", "deletedAt"
+    FROM "Node"
+    WHERE "id" = ${input.targetFolderId}::uuid
+      AND "kind" = 'FOLDER'
+    FOR UPDATE
+  `);
+  const target = targets.at(0);
+  if (target === undefined) throw new AccessDeniedException();
+  if (
+    target.id === access.nodeId ||
+    target.kind !== 'FOLDER' ||
+    target.dataRoomId !== access.dataRoomId ||
+    target.deletedAt !== null
+  ) {
+    throw new AccessDeniedException();
+  }
+  const current = await transaction.node.findUnique({ where: { id: access.nodeId } });
+  if (current?.deletedAt !== null) throw resourceGone();
+  const updated = await transaction.node.updateMany({
+    where: {
+      id: access.nodeId,
+      dataRoomId: access.dataRoomId,
+      revision: input.expectedRevision,
+      deletedAt: null,
+    },
+    data: { parentId: input.targetFolderId, revision: { increment: 1 } },
+  });
+  const after = await transaction.node.findUnique({ where: { id: access.nodeId } });
+  if (updated.count === 1 && after?.deletedAt === null) return toNodeSummary(after, 'OWNER');
+  if (after?.dataRoomId === access.dataRoomId && after.deletedAt === null) {
+    throw new ApiException('CONFLICT', HttpStatus.CONFLICT, 'The node changed.');
+  }
+  throw resourceGone();
+}
+
+function invalidFile(): ApiException {
+  return new ApiException(
+    'INVALID_FILE',
+    HttpStatus.BAD_REQUEST,
+    'The node is not an active file.',
+  );
+}
+
+function resourceGone(): ApiException {
+  return new ApiException('RESOURCE_GONE', HttpStatus.GONE, 'The node is no longer available.');
+}
+
+function persistenceFailure(message: string): ApiException {
+  return new ApiException('INTERNAL_ERROR', HttpStatus.INTERNAL_SERVER_ERROR, message);
 }
 
 async function proveParent(
