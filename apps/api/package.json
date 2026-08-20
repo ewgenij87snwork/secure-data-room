@@ -1,0 +1,43 @@
+{
+  "name": "@data-room/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "nest start --watch",
+    "prisma:generate": "prisma generate --config ../../prisma.config.ts",
+    "prebuild": "pnpm --filter @data-room/contracts build && pnpm prisma:generate",
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest",
+    "test:run": "vitest run"
+  },
+  "dependencies": {
+    "@data-room/contracts": "workspace:*",
+    "@nestjs/common": "11.1.28",
+    "@nestjs/core": "11.1.28",
+    "@nestjs/platform-express": "11.1.28",
+    "@nestjs/swagger": "^11.0.0",
+    "@prisma/adapter-pg": "7.9.1",
+    "@prisma/client": "7.9.1",
+    "@supabase/supabase-js": "^2.0.0",
+    "helmet": "^8.0.0",
+    "jose": "^6.0.0",
+    "pg": "^8.0.0",
+    "reflect-metadata": "^0.2.0",
+    "rxjs": "^7.8.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@nestjs/testing": "11.1.28",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.0.0",
+    "@types/supertest": "^6.0.0",
+    "supertest": "^7.0.0",
+    "typescript": "6.0.2",
+    "vitest": "^4.0.0",
+    "prisma": "7.9.1"
+  }
+}

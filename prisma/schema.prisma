@@ -1,0 +1,156 @@
+generator client {
+  provider   = "prisma-client"
+  output     = "../apps/api/src/generated/prisma"
+  engineType = "client"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum NodeKind {
+  FOLDER
+  FILE
+}
+
+enum UploadStatus {
+  PREPARED
+  UPLOADING
+  FINALIZED
+  CANCELLED
+  EXPIRED
+  REJECTED
+}
+
+enum SharePrincipalType {
+  USER
+  PUBLIC_LINK
+}
+
+enum ShareRole {
+  VIEWER
+  EDITOR
+}
+
+enum CleanupStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+model UserProfile {
+  id             String          @id @db.Uuid
+  email          String          @unique @db.Citext
+  displayName    String?         @db.VarChar(120)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  ownedRooms     DataRoom[]
+  uploadSessions UploadSession[]
+  grantedShares  Share[]         @relation("ShareGrantor")
+  receivedShares Share[]         @relation("ShareRecipient")
+}
+
+model DataRoom {
+  id        String      @id @default(uuid()) @db.Uuid
+  ownerId   String      @unique @db.Uuid
+  name      String      @db.VarChar(120)
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+  owner     UserProfile @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  nodes     Node[]
+
+}
+
+model Node {
+  id                   String              @id @default(uuid()) @db.Uuid
+  dataRoomId           String              @db.Uuid
+  parentId             String?             @db.Uuid
+  kind                 NodeKind
+  name                 String              @db.VarChar(120)
+  normalizedName       String              @db.VarChar(120)
+  sizeBytes            BigInt?
+  mimeType             String?             @db.VarChar(100)
+  storageKey           String?             @unique @db.VarChar(300)
+  revision             Int                 @default(1)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  deletedAt            DateTime?
+  dataRoom             DataRoom            @relation(fields: [dataRoomId], references: [id], onDelete: Restrict)
+  parent               Node?               @relation("NodeChildren", fields: [parentId], references: [id], onDelete: Restrict)
+  children             Node[]              @relation("NodeChildren")
+  parentUploadSessions UploadSession[]     @relation("UploadParent")
+  finalizedUpload      UploadSession?      @relation("UploadFile")
+  shares               Share[]
+  cleanupJobs          StorageCleanupJob[]
+
+  @@index([dataRoomId, parentId, deletedAt])
+}
+
+model UploadSession {
+  id                String       @id @default(uuid()) @db.Uuid
+  ownerId           String       @db.Uuid
+  parentNodeId      String       @db.Uuid
+  clientId          String       @db.Uuid
+  storageKey        String       @unique @db.VarChar(300)
+  requestedName     String       @db.VarChar(120)
+  normalizedName    String       @db.VarChar(120)
+  expectedSizeBytes BigInt
+  mimeType          String       @db.VarChar(100)
+  status            UploadStatus @default(PREPARED)
+  expiresAt         DateTime
+  finalizedAt       DateTime?
+  fileNodeId        String?      @unique @db.Uuid
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  owner             UserProfile  @relation(fields: [ownerId], references: [id], onDelete: Restrict)
+  parentNode        Node         @relation("UploadParent", fields: [parentNodeId], references: [id], onDelete: Restrict)
+  fileNode          Node?        @relation("UploadFile", fields: [fileNodeId], references: [id], onDelete: Restrict)
+
+  @@unique([ownerId, clientId])
+  @@index([ownerId, status, expiresAt])
+}
+
+model Share {
+  id              String             @id @default(uuid()) @db.Uuid
+  targetNodeId    String             @db.Uuid
+  grantedByUserId String             @db.Uuid
+  principalType   SharePrincipalType
+  role            ShareRole          @default(VIEWER)
+  recipientUserId String?            @db.Uuid
+  recipientEmail  String?            @db.Citext
+  tokenHash       Bytes?
+  createdAt       DateTime           @default(now())
+  revokedAt       DateTime?
+  targetNode      Node               @relation(fields: [targetNodeId], references: [id], onDelete: Restrict)
+  grantedBy       UserProfile        @relation("ShareGrantor", fields: [grantedByUserId], references: [id], onDelete: Restrict)
+  recipient       UserProfile?       @relation("ShareRecipient", fields: [recipientUserId], references: [id], onDelete: Restrict)
+
+  @@index([targetNodeId, revokedAt])
+  @@index([recipientUserId, revokedAt])
+  @@index([recipientEmail, revokedAt])
+}
+
+model StorageCleanupJob {
+  id            String        @id @default(uuid()) @db.Uuid
+  rootNodeId    String        @unique @db.Uuid
+  status        CleanupStatus @default(PENDING)
+  attempts      Int           @default(0)
+  nextAttemptAt DateTime      @default(now())
+  lastErrorCode String?       @db.VarChar(80)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  rootNode      Node          @relation(fields: [rootNodeId], references: [id], onDelete: Restrict)
+
+  @@index([status, nextAttemptAt])
+}
+
+model RuntimeControl {
+  id                 Int      @id @default(1)
+  registrationOpen   Boolean  @default(false)
+  uploadsEnabled     Boolean  @default(false)
+  publicLinksEnabled Boolean  @default(false)
+  maintenanceMode    Boolean  @default(false)
+  updatedAt          DateTime @updatedAt
+}
