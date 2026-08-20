@@ -9,6 +9,7 @@ import { AuthContext, type AuthContextValue } from '../auth/auth-context.js';
 vi.stubEnv('VITE_API_BASE_URL', 'https://api.example.test/v1/');
 vi.stubEnv('VITE_SUPABASE_URL', 'https://project.supabase.co');
 vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', 'publishable-key-1234567890');
+const dataRoomRouteModule = import('./data-room-route.js');
 
 const rootId = '550e8400-e29b-41d4-a716-446655440000';
 const folderId = '550e8400-e29b-41d4-a716-446655440001';
@@ -122,15 +123,15 @@ describe('DataRoomRoute', () => {
     ['owner on a file route', { accessRole: 'OWNER' as const, kind: 'FILE' as const }, { uploadsEnabled: true, maintenanceMode: false }, false],
   ])('%s shows upload controls only when the mounted route permits them', async (_name, nodeOverrides, runtime, visible) => {
     const current = node({ id: rootId, ...nodeOverrides });
-    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => routeResponse(input, current, [], { ...bootstrap, runtime: { ...bootstrap.runtime, ...runtime } })));
-    await renderRoute(current, { ...bootstrap, runtime: { ...bootstrap.runtime, ...runtime } });
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => routeResponse(input, current, [])));
+    await renderRoute({ ...bootstrap, runtime: { ...bootstrap.runtime, ...runtime } });
     if (visible) expect(await screen.findByLabelText('Choose PDF files')).toBeVisible();
     else expect(screen.queryByLabelText('Choose PDF files')).not.toBeInTheDocument();
   });
 });
 
-async function renderRoute(current = node({ id: rootId, parentId: null, name: 'Due diligence' }), routeBootstrap = bootstrap): Promise<ReturnType<typeof render>> {
-  const { DataRoomRoute } = await import('./data-room-route.js');
+async function renderRoute(routeBootstrap = bootstrap): Promise<ReturnType<typeof render>> {
+  const { DataRoomRoute } = await dataRoomRouteModule;
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -153,7 +154,6 @@ function routeResponse(
   input: RequestInfo | URL,
   current: NodeSummary,
   children: NodeSummary[],
-  responseBootstrap: BootstrapResponse = bootstrap,
 ): Promise<Response> {
   const url = requestUrl(input);
   if (url.pathname.endsWith(`/nodes/${rootId}/breadcrumbs`)) {

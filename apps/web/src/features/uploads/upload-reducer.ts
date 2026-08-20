@@ -49,8 +49,10 @@ export function uploadReducer(state: UploadQueueState, action: UploadAction): Up
   switch (action.type) {
     case 'add': return { ...state, items: [...state.items, ...action.items] };
     case 'preparing': return change(state, action.clientId, 'preparing', (current) => {
-      const { errorCode: _errorCode, errorMessage: _errorMessage, ...withoutError } = current;
-      return { ...withoutError, state: 'preparing' };
+      const next = { ...current, state: 'preparing' as const };
+      delete next.errorCode;
+      delete next.errorMessage;
+      return next;
     });
     case 'uploading': return change(state, action.clientId, 'uploading', (current) => ({ ...current, state: 'uploading', sessionId: action.sessionId }));
     case 'progress': {
@@ -66,8 +68,11 @@ export function uploadReducer(state: UploadQueueState, action: UploadAction): Up
     }
     case 'failed': return change(state, action.clientId, 'failed', (current) => ({ ...current, state: 'failed', ...(action.errorCode ? { errorCode: action.errorCode } : {}), errorMessage: action.errorMessage }));
     case 'retry': return change(state, action.clientId, 'queued', (current) => {
-      const { sessionId: _sessionId, errorCode: _errorCode, errorMessage: _errorMessage, ...withoutAttemptData } = current;
-      return { ...withoutAttemptData, state: 'queued', bytesUploaded: 0, percent: 0, attempt: current.attempt + 1 };
+      const next = { ...current, state: 'queued' as const, bytesUploaded: 0, percent: 0, attempt: current.attempt + 1 };
+      delete next.sessionId;
+      delete next.errorCode;
+      delete next.errorMessage;
+      return next;
     });
     case 'cancelled': return change(state, action.clientId, 'cancelled', (current) => ({ ...current, state: 'cancelled' }));
     case 'clear': return initialUploadQueueState;

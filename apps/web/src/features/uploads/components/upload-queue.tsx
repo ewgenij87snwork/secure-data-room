@@ -1,4 +1,4 @@
-import { useOptionalUploadQueue } from '../use-upload-queue.js';
+import { useOptionalUploadQueue } from '../upload-queue-context.js';
 import { UploadQueueItem } from './upload-queue-item.js';
 
 export function UploadQueue(): React.JSX.Element | null {

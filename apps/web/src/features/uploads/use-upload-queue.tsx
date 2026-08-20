@@ -1,36 +1,38 @@
-import { createContext, createElement, useCallback, useContext, useEffect, useLayoutEffect, useReducer, useRef, type ReactNode } from 'react';
+import { createElement, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, type ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useAuth } from '../auth/auth-context.js';
+import { useAuth, type AuthContextValue } from '../auth/auth-context.js';
 import { ApiClientError } from '../../lib/api-error.js';
 import { cancelUpload, finalizeUpload, prepareUploads } from '../data-room/data-room-api.js';
 import { nodeKeys } from '../data-room/data-room-keys.js';
 import { startTusUpload } from './tus-upload.js';
 import { initialUploadQueueState, uploadReducer } from './upload-reducer.js';
-import type { UploadItem, UploadQueueState } from './upload-types.js';
+import type { UploadItem } from './upload-types.js';
 import { validatePdfSelection } from './upload-types.js';
-
-type QueueContextValue = Readonly<{
-  state: UploadQueueState;
-  addFiles: (parentId: string, files: readonly File[]) => Promise<void>;
-  retry: (clientId: string) => void;
-  cancel: (clientId: string) => void;
-}>;
-
-const QueueContext = createContext<QueueContextValue | null>(null);
-export function useUploadQueue(): QueueContextValue {
-  const value = useContext(QueueContext);
-  if (!value) throw new Error('useUploadQueue must be used within UploadQueueProvider');
-  return value;
-}
-export function useOptionalUploadQueue(): QueueContextValue | null { return useContext(QueueContext); }
+import { QueueContext } from './upload-queue-context.js';
+import { isFinalizeForClient } from './upload-queue-helpers.js';
 function newClientId(): string { return crypto.randomUUID(); }
 
-type Operation = { generation: number; userId: string; token: string; attempt: number; cancelled: boolean };
-type Transport = { upload: { abort: () => void | Promise<void> }; settle: () => void; sessionId: string; attempt: number };
-export function isFinalizeForClient(response: { clientId: string }, clientId: string): boolean { return response.clientId === clientId; }
+interface Operation {
+  generation: number;
+  userId: string;
+  token: string;
+  attempt: number;
+  cancelled: boolean;
+}
 
+interface Transport {
+  upload: { abort: () => void | Promise<void> };
+  settle: () => void;
+  sessionId: string;
+  attempt: number;
+}
 export function UploadQueueProvider({ children }: { children: ReactNode }): React.JSX.Element {
   const auth = useAuth();
+  const userId = auth.status === 'authenticated' && auth.user ? auth.user.id : null;
+  return createElement(IdentityUploadQueueProvider, { key: userId ?? 'anonymous', auth, children });
+}
+
+function IdentityUploadQueueProvider({ children, auth }: { children: ReactNode; auth: AuthContextValue }): React.JSX.Element {
   const queryClient = useQueryClient();
   const [state, dispatch] = useReducer(uploadReducer, initialUploadQueueState);
   const stateRef = useRef(state);
@@ -39,25 +41,21 @@ export function UploadQueueProvider({ children }: { children: ReactNode }): Reac
   const sessions = useRef(new Map<string, string>());
   const running = useRef(new Set<string>());
   const generationRef = useRef(0);
-  const identityRef = useRef<string | null>(null);
   const tokenRef = useRef<string | null>(auth.accessToken);
   const userId = auth.status === 'authenticated' && auth.user ? auth.user.id : null;
-  const committedIdentityRef = useRef<string | null>(userId);
-  stateRef.current = state;
-  tokenRef.current = auth.accessToken;
-  const identityMismatch = committedIdentityRef.current !== userId;
-  if (identityRef.current !== userId) {
-    identityRef.current = userId;
-    generationRef.current += 1;
-  }
+
+  useLayoutEffect(() => {
+    stateRef.current = state;
+    tokenRef.current = auth.accessToken;
+  }, [auth.accessToken, state]);
 
   const isCurrent = useCallback((clientId: string, operation: Operation, expected?: UploadItem['state']): boolean => {
     const current = stateRef.current.items.find((item) => item.clientId === clientId);
     const phaseMatches = !expected || current?.state === expected || (expected === 'preparing' && current?.state === 'queued');
-    return Boolean(current && !operation.cancelled && operation.generation === generationRef.current && operation.userId === identityRef.current && current.attempt === operation.attempt && phaseMatches);
-  }, []);
+    return Boolean(current && !operation.cancelled && operation.generation === generationRef.current && operation.userId === userId && current.attempt === operation.attempt && phaseMatches);
+  }, [userId]);
 
-  const clear = useCallback(() => {
+  const dispose = useCallback(() => {
     generationRef.current += 1;
     operations.current.forEach((operation) => { operation.cancelled = true; });
     transports.current.forEach((transport, clientId) => {
@@ -70,21 +68,13 @@ export function UploadQueueProvider({ children }: { children: ReactNode }): Reac
     operations.current.clear();
     sessions.current.clear();
     running.current.clear();
-    if (stateRef.current.items.length > 0 || stateRef.current.intakeErrors.length > 0) dispatch({ type: 'clear' });
   }, []);
 
-  useLayoutEffect(() => {
-    if (committedIdentityRef.current !== userId) {
-      committedIdentityRef.current = userId;
-      clear();
-    } else if (!userId && (stateRef.current.items.length > 0 || stateRef.current.intakeErrors.length > 0)) {
-      clear();
-    }
-  }, [clear, userId]);
+  useLayoutEffect(() => () => dispose(), [dispose]);
 
   const run = useCallback(async (clientId: string): Promise<void> => {
     const current = stateRef.current.items.find((item) => item.clientId === clientId);
-    if (!current || current.state !== 'queued' || !auth.accessToken || !userId) return;
+    if (current?.state !== 'queued' || !auth.accessToken || !userId) return;
     const operation: Operation = { generation: generationRef.current, userId, token: auth.accessToken, attempt: current.attempt, cancelled: false };
     operations.current.set(clientId, operation);
     running.current.add(clientId);
@@ -107,7 +97,7 @@ export function UploadQueueProvider({ children }: { children: ReactNode }): Reac
         transports.current.set(clientId, { upload: transport, settle: settlePromise, sessionId: prepared.sessionId, attempt: operation.attempt });
         dispatch({ type: 'uploading', clientId, sessionId: prepared.sessionId });
         queueMicrotask(() => {
-          if (!operation.cancelled && operation.generation === generationRef.current && operation.userId === identityRef.current) transport.start();
+          if (!operation.cancelled && operation.generation === generationRef.current && operation.userId === userId) transport.start();
         });
       });
       await completion;
@@ -133,10 +123,10 @@ export function UploadQueueProvider({ children }: { children: ReactNode }): Reac
   }, [auth.accessToken, isCurrent, queryClient, userId]);
 
   useEffect(() => {
-    if (identityMismatch || !auth.accessToken || !userId) return;
+    if (!auth.accessToken || !userId) return;
     const available = 3 - running.current.size;
     state.items.filter((item) => item.state === 'queued').slice(0, Math.max(0, available)).forEach((item) => void run(item.clientId));
-  }, [auth.accessToken, identityMismatch, run, state, userId]);
+  }, [auth.accessToken, run, state, userId]);
 
   const addFiles = useCallback(async (parentId: string, files: readonly File[]) => {
     const selection = await validatePdfSelection(files);
@@ -146,14 +136,14 @@ export function UploadQueueProvider({ children }: { children: ReactNode }): Reac
 
   const retry = useCallback((clientId: string) => {
     const current = stateRef.current.items.find((item) => item.clientId === clientId);
-    if (!current || current.state !== 'failed') return;
+    if (current?.state !== 'failed') return;
     const oldSession = sessions.current.get(clientId) ?? current.sessionId;
-      const token = tokenRef.current;
-    const operation = operations.current.get(clientId);
-    if (operation) operation.cancelled = true;
+    const token = tokenRef.current;
+    const retryGeneration = generationRef.current;
+    const retryUserId = userId;
     void (async () => {
       if (oldSession && token) await Promise.resolve(cancelUpload(token, oldSession)).catch(() => undefined);
-      if (identityRef.current === userId && token === tokenRef.current && stateRef.current.items.some((item) => item.clientId === clientId && item.state === 'failed')) dispatch({ type: 'retry', clientId });
+      if (retryGeneration === generationRef.current && retryUserId === userId && token === tokenRef.current && stateRef.current.items.some((item) => item.clientId === clientId && item.state === 'failed')) dispatch({ type: 'retry', clientId });
     })();
   }, [userId]);
 
@@ -171,6 +161,6 @@ export function UploadQueueProvider({ children }: { children: ReactNode }): Reac
     if (sessionId && token) void Promise.resolve(cancelUpload(token, sessionId)).catch(() => undefined);
   }, []);
 
-  const exposedState = identityMismatch ? initialUploadQueueState : state;
-  return createElement(QueueContext.Provider, { value: { state: exposedState, addFiles, retry, cancel } }, children);
+  const value = useMemo(() => ({ state, addFiles, retry, cancel }), [addFiles, cancel, retry, state]);
+  return <QueueContext.Provider value={value}>{children}</QueueContext.Provider>;
 }
