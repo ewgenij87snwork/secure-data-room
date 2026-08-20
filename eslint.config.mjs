@@ -36,6 +36,10 @@ export default tseslint.config(
     },
   },
   {
+    ...tseslint.configs.disableTypeChecked,
+    files: ['**/*.{js,mjs,cjs}'],
+  },
+  {
     files: ['apps/api/**/*.ts', 'scripts/**/*.ts', 'prisma/**/*.ts'],
     languageOptions: { globals: globals.node },
   },

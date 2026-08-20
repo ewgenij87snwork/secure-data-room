@@ -32,18 +32,18 @@ No passwords or private credentials are stored in this repository. The public-li
 
 > The release integrator must replace `{{PASS_OR_REMOVE}}` with `PASS` only after the linked evidence exists. Remove rows that are not implemented.
 
-| Capability | Status | Evidence |
-|---|---:|---|
-| Google authentication and private owner boundary | {{PASS_OR_REMOVE}} | `{{AUTH_EVIDENCE}}` |
-| Nested folders, contents, breadcrumbs, rename | {{PASS_OR_REMOVE}} | `{{FOLDER_EVIDENCE}}` |
-| Impact-aware recursive folder deletion | {{PASS_OR_REMOVE}} | `{{DELETE_EVIDENCE}}` |
-| Multi-PDF drag/drop with per-file real progress | {{PASS_OR_REMOVE}} | `{{UPLOAD_EVIDENCE}}` |
-| In-app PDF view, rename, move, delete | {{PASS_OR_REMOVE}} | `{{FILE_EVIDENCE}}` |
-| Public-link subtree sharing and revoke | {{PASS_OR_REMOVE}} | `{{PUBLIC_SHARE_EVIDENCE}}` |
-| Permissioned read-only sharing and `Shared with me` | {{PASS_OR_REMOVE}} | `{{USER_SHARE_EVIDENCE}}` |
-| Loading, empty, offline, conflict, quota, gone, revoked, invalid-link states | {{PASS_OR_REMOVE}} | `{{UX_STATE_EVIDENCE}}` |
-| Responsive and keyboard-accessible mandatory flows | {{PASS_OR_REMOVE}} | `{{ACCESSIBILITY_EVIDENCE}}` |
-| Public frontend and backend at one Git SHA | {{PASS_OR_REMOVE}} | `{{DEPLOYMENT_EVIDENCE}}` |
+| Capability                                                                   |             Status | Evidence                     |
+| ---------------------------------------------------------------------------- | -----------------: | ---------------------------- |
+| Google authentication and private owner boundary                             | {{PASS_OR_REMOVE}} | `{{AUTH_EVIDENCE}}`          |
+| Nested folders, contents, breadcrumbs, rename                                | {{PASS_OR_REMOVE}} | `{{FOLDER_EVIDENCE}}`        |
+| Impact-aware recursive folder deletion                                       | {{PASS_OR_REMOVE}} | `{{DELETE_EVIDENCE}}`        |
+| Multi-PDF drag/drop with per-file real progress                              | {{PASS_OR_REMOVE}} | `{{UPLOAD_EVIDENCE}}`        |
+| In-app PDF view, rename, move, delete                                        | {{PASS_OR_REMOVE}} | `{{FILE_EVIDENCE}}`          |
+| Public-link subtree sharing and revoke                                       | {{PASS_OR_REMOVE}} | `{{PUBLIC_SHARE_EVIDENCE}}`  |
+| Permissioned read-only sharing and `Shared with me`                          | {{PASS_OR_REMOVE}} | `{{USER_SHARE_EVIDENCE}}`    |
+| Loading, empty, offline, conflict, quota, gone, revoked, invalid-link states | {{PASS_OR_REMOVE}} | `{{UX_STATE_EVIDENCE}}`      |
+| Responsive and keyboard-accessible mandatory flows                           | {{PASS_OR_REMOVE}} | `{{ACCESSIBILITY_EVIDENCE}}` |
+| Public frontend and backend at one Git SHA                                   | {{PASS_OR_REMOVE}} | `{{DEPLOYMENT_EVIDENCE}}`    |
 
 Optional filename search is listed only if it is a complete, tested vertical slice. File versioning is intentionally outside the deadline scope unless this sentence is replaced by verified implementation evidence.
 
@@ -133,19 +133,19 @@ The correctness path is one room-scoped recursive PostgreSQL CTE from the select
 
 ## Edge cases deliberately handled
 
-| Case | Intentional behavior |
-|---|---|
-| Same name in one folder | manual action receives a specific conflict plus suggestion; upload allocation uses a DB-protected `(n)` suffix retry |
-| Two concurrent same-name writes | one wins the unique constraint; the loser maps to stable `NAME_CONFLICT` rather than silently overwriting |
-| Mixed upload batch | invalid/failed files retain independent state while valid files continue |
-| Duplicate finalize/delete/revoke | idempotent response; no duplicate file, cleanup job, or state corruption |
-| Folder deleted while a recipient views it | subtree becomes unreadable immediately; next request renders an explicit gone/revoked state |
-| Share created before recipient registers | normalized verified email binds atomically to the immutable auth UUID at first bootstrap |
-| Known UUID from another room/user | policy denies without leaking private node metadata |
-| Public link copied into logs/history | secret begins in the URL fragment, is removed after capture, travels in a redacted header, and only its SHA-256 digest is stored |
-| Already-open PDF after revoke | no new read URL is issued; the existing signed URL has a disclosed maximum residual TTL |
-| Storage deletion fails | content remains logically unavailable; one cleanup job retries without resurrection |
-| Stale rename/move tab | expected revision rejects silent lost updates |
+| Case                                      | Intentional behavior                                                                                                             |
+| ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Same name in one folder                   | manual action receives a specific conflict plus suggestion; upload allocation uses a DB-protected `(n)` suffix retry             |
+| Two concurrent same-name writes           | one wins the unique constraint; the loser maps to stable `NAME_CONFLICT` rather than silently overwriting                        |
+| Mixed upload batch                        | invalid/failed files retain independent state while valid files continue                                                         |
+| Duplicate finalize/delete/revoke          | idempotent response; no duplicate file, cleanup job, or state corruption                                                         |
+| Folder deleted while a recipient views it | subtree becomes unreadable immediately; next request renders an explicit gone/revoked state                                      |
+| Share created before recipient registers  | normalized verified email binds atomically to the immutable auth UUID at first bootstrap                                         |
+| Known UUID from another room/user         | policy denies without leaking private node metadata                                                                              |
+| Public link copied into logs/history      | secret begins in the URL fragment, is removed after capture, travels in a redacted header, and only its SHA-256 digest is stored |
+| Already-open PDF after revoke             | no new read URL is issued; the existing signed URL has a disclosed maximum residual TTL                                          |
+| Storage deletion fails                    | content remains logically unavailable; one cleanup job retries without resurrection                                              |
+| Stale rename/move tab                     | expected revision rejects silent lost updates                                                                                    |
 
 ## Granular React component boundary
 

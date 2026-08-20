@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PrismaService } from '../database/prisma.service.js';
+import type { HealthController as HealthControllerInstance } from './health.controller.js';
 
 vi.stubEnv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/postgres');
 vi.stubEnv('SUPABASE_URL', 'https://example.supabase.co');
@@ -11,7 +12,7 @@ vi.stubEnv('GIT_COMMIT_SHA', 'abc1234');
 
 const { HealthController } = await import('./health.controller.js');
 
-function createController(queryResult: unknown = [{ one: 1 }]): HealthController {
+function createController(queryResult: unknown = [{ one: 1 }]): HealthControllerInstance {
   const prisma = { $queryRaw: vi.fn().mockResolvedValue(queryResult) } as unknown as PrismaService;
   return new HealthController(prisma);
 }

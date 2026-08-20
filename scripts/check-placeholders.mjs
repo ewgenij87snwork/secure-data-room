@@ -28,7 +28,9 @@ if (/\{\{[A-Z0-9_]+\}\}|REPLACE_WITH|example\.com|changeme/u.test(readme)) {
 }
 
 if (failures.length) {
-  console.error(`Placeholder markers found in production paths:\n${failures.map((f) => `- ${f}`).join('\n')}`);
+  console.error(
+    `Placeholder markers found in production paths:\n${failures.map((f) => `- ${f}`).join('\n')}`,
+  );
   process.exitCode = 1;
 } else {
   console.log('Placeholder check passed.');

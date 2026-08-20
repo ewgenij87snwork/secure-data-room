@@ -8,7 +8,10 @@ async function walk(path) {
   const entries = await readdir(path, { withFileTypes: true });
   const files = [];
   for (const entry of entries) {
-    if (['node_modules', 'dist', 'coverage', '.git', '.worktrees', 'generated'].includes(entry.name)) continue;
+    if (
+      ['node_modules', 'dist', 'coverage', '.git', '.worktrees', 'generated'].includes(entry.name)
+    )
+      continue;
     const full = join(path, entry.name);
     if (entry.isDirectory()) files.push(...(await walk(full)));
     else files.push(full);
@@ -21,8 +24,17 @@ const packageFiles = (await walk(rootPath)).filter((file) => file.endsWith('pack
 for (const file of packageFiles) {
   const pkg = JSON.parse(await readFile(file, 'utf8'));
   const dependencies = { ...pkg.dependencies, ...pkg.devDependencies };
-  for (const forbidden of ['next', '@supabase/ssr', 'firebase', 'redis', 'ioredis', '@nestjs/cqrs', '@trpc/server']) {
-    if (dependencies[forbidden]) failures.push(`${relative(rootPath, file)} includes forbidden ${forbidden}`);
+  for (const forbidden of [
+    'next',
+    '@supabase/ssr',
+    'firebase',
+    'redis',
+    'ioredis',
+    '@nestjs/cqrs',
+    '@trpc/server',
+  ]) {
+    if (dependencies[forbidden])
+      failures.push(`${relative(rootPath, file)} includes forbidden ${forbidden}`);
   }
 }
 
@@ -41,7 +53,9 @@ if (/model DataRoom\s*\{[^}]*\brootNodeId\b/u.test(schema)) {
 if (!/model RuntimeControl/u.test(schema)) failures.push('RuntimeControl model is missing.');
 if (!/tokenHash\s+Bytes/u.test(schema)) failures.push('Public share token hash field is missing.');
 
-const appFiles = (await walk(join(rootPath, 'apps'))).filter((file) => ['.ts', '.tsx'].includes(extname(file)));
+const appFiles = (await walk(join(rootPath, 'apps'))).filter((file) =>
+  ['.ts', '.tsx'].includes(extname(file)),
+);
 for (const file of appFiles) {
   const text = await readFile(file, 'utf8');
   if (/SUPABASE_SERVICE_ROLE_KEY/u.test(text) && file.includes('/web/')) {

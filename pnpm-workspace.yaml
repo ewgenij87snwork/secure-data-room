@@ -2,6 +2,12 @@ packages:
   - apps/*
   - packages/*
 
-onlyBuiltDependencies:
-  - '@prisma/engines'
-  - prisma
+overrides:
+  'deepmerge-ts@<8.0.0': 8.0.1
+
+allowBuilds:
+  '@prisma/engines': true
+  '@scarf/scarf': false
+  esbuild: true
+  msw: false
+  prisma: true

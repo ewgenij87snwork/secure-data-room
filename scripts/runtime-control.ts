@@ -177,7 +177,9 @@ async function applyMode(
       2,
     ),
   );
-  console.log('Previously issued signed upload/read capabilities remain valid until their provider TTL expires.');
+  console.log(
+    'Previously issued signed upload/read capabilities remain valid until their provider TTL expires.',
+  );
 }
 
 async function main(): Promise<void> {

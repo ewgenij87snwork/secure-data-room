@@ -33,12 +33,12 @@
 
 ## Verification evidence
 
-| Gate | Command / scenario | Result | Evidence |
-|---|---|---:|---|
-| Local verification | `pnpm verify` | `{{PASS}}` | `{{EVIDENCE}}` |
-| Deployed E2E | `pnpm e2e:deployed` | `{{PASS}}` | `{{EVIDENCE}}` |
-| Owner/viewer/public smoke | browser profiles | `{{PASS}}` | `{{EVIDENCE}}` |
-| Same SHA | web + API `/v1/health/version` | `{{PASS}}` | `{{EVIDENCE}}` |
+| Gate                      | Command / scenario             |     Result | Evidence       |
+| ------------------------- | ------------------------------ | ---------: | -------------- |
+| Local verification        | `pnpm verify`                  | `{{PASS}}` | `{{EVIDENCE}}` |
+| Deployed E2E              | `pnpm e2e:deployed`            | `{{PASS}}` | `{{EVIDENCE}}` |
+| Owner/viewer/public smoke | browser profiles               | `{{PASS}}` | `{{EVIDENCE}}` |
+| Same SHA                  | web + API `/v1/health/version` | `{{PASS}}` | `{{EVIDENCE}}` |
 
 ## Visual evidence
 

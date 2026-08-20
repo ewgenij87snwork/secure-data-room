@@ -3,8 +3,27 @@ import { extname, join, relative } from 'node:path';
 
 const root = new URL('..', import.meta.url).pathname;
 const failures = [];
-const extensions = new Set(['.ts', '.tsx', '.js', '.mjs', '.json', '.yaml', '.yml', '.sql', '.prisma', '.md']);
-const skippedDirectories = new Set(['node_modules', 'dist', 'coverage', '.git', '.worktrees', 'generated', 'visuals']);
+const extensions = new Set([
+  '.ts',
+  '.tsx',
+  '.js',
+  '.mjs',
+  '.json',
+  '.yaml',
+  '.yml',
+  '.sql',
+  '.prisma',
+  '.md',
+]);
+const skippedDirectories = new Set([
+  'node_modules',
+  'dist',
+  'coverage',
+  '.git',
+  '.worktrees',
+  'generated',
+  'visuals',
+]);
 
 async function walk(path) {
   const files = [];
@@ -23,7 +42,10 @@ const patterns = [
   ['Supabase personal access token', /\bsbp_[A-Za-z0-9_-]{20,}\b/u],
   ['AWS access key', /\bAKIA[0-9A-Z]{16}\b/u],
   ['JWT-looking secret', /\beyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\b/u],
-  ['non-local PostgreSQL password URL', /postgres(?:ql)?:\/\/[^\s:@]+:[^\s@]+@(?!127\.0\.0\.1|localhost)[^\s/]+/u],
+  [
+    'non-local PostgreSQL password URL',
+    /postgres(?:ql)?:\/\/[^\s:@]+:[^\s@]+@(?!127\.0\.0\.1|localhost)[^\s/]+/u,
+  ],
 ];
 
 for (const file of await walk(root)) {
@@ -32,7 +54,10 @@ for (const file of await walk(root)) {
   for (const [label, pattern] of patterns) {
     if (pattern.test(text)) failures.push(`${relative(root, file)}: ${label}`);
   }
-  if (file.includes('/apps/web/') && /SUPABASE_SERVICE_ROLE_KEY|DIRECT_URL|DATABASE_URL|SUPABASE_ACCESS_TOKEN/u.test(text)) {
+  if (
+    file.includes('/apps/web/') &&
+    /SUPABASE_SERVICE_ROLE_KEY|DIRECT_URL|DATABASE_URL|SUPABASE_ACCESS_TOKEN/u.test(text)
+  ) {
     failures.push(`${relative(root, file)}: server/operations secret referenced in browser source`);
   }
   if (file.includes('/apps/') && /dangerouslySetInnerHTML/u.test(text)) {
