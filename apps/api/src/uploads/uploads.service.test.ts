@@ -37,6 +37,14 @@ interface UpdateArgs {
   data: Record<string, unknown>;
 }
 
+function objectContaining<T extends object>(value: T): T {
+  return expect.objectContaining(value) as T;
+}
+
+function stringMatching(pattern: RegExp): string {
+  return expect.stringMatching(pattern) as string;
+}
+
 function database() {
   const session = {
     create: vi.fn().mockResolvedValue({
@@ -108,22 +116,18 @@ function service(
   const db = overrides.db ?? database();
   const policy = { assertCanCreateChild: vi.fn().mockResolvedValue(parent) };
   const controls = {
-    read: vi
-      .fn()
-      .mockResolvedValue({
-        uploadsEnabled: true,
-        maintenanceMode: false,
-        ...(overrides.controls ?? {}),
-      }),
+    read: vi.fn().mockResolvedValue({
+      uploadsEnabled: true,
+      maintenanceMode: false,
+      ...(overrides.controls ?? {}),
+    }),
   };
   const storage = {
-    createSignedUpload: vi
-      .fn()
-      .mockResolvedValue({
-        token: 'token-token-token',
-        tusEndpoint: 'https://project.supabase.co/storage/v1/upload/resumable',
-        expiresAt: new Date('2026-08-20T12:00:00.000Z'),
-      }),
+    createSignedUpload: vi.fn().mockResolvedValue({
+      token: 'token-token-token',
+      tusEndpoint: 'https://project.supabase.co/storage/v1/upload/resumable',
+      expiresAt: new Date('2026-08-20T12:00:00.000Z'),
+    }),
     getMetadata: vi.fn().mockResolvedValue({ sizeBytes: 12, contentType: 'application/pdf' }),
     readPrefix: vi.fn().mockResolvedValue(Uint8Array.from([37, 80, 68, 70, 45])),
     remove: vi.fn(),
@@ -197,13 +201,11 @@ describe('UploadsService', () => {
     await subject.prepare(owner, input);
 
     expect(db.uploadSession.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        where: expect.objectContaining({ id: '66666666-6666-4666-8666-666666666666' }),
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        data: expect.objectContaining({
+      objectContaining({
+        where: objectContaining({ id: '66666666-6666-4666-8666-666666666666' }),
+        data: objectContaining({
           status: 'PREPARED',
-          storageKey: expect.stringMatching(/\/objects\/[0-9a-f-]{36}$/u),
+          storageKey: stringMatching(/\/objects\/[0-9a-f-]{36}$/u),
         }),
       }),
     );
@@ -263,10 +265,9 @@ describe('UploadsService', () => {
     await expect(subject.prepare(owner, batch)).resolves.toMatchObject({
       uploads: [{ clientId: input.files[0]!.clientId }],
     });
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     expect(db.uploadSession.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({ id: '66666666-6666-4666-8666-666666666667' }),
+      objectContaining({
+        where: objectContaining({ id: '66666666-6666-4666-8666-666666666667' }),
         data: { status: 'REJECTED' },
       }),
     );
@@ -359,9 +360,8 @@ describe('UploadsService', () => {
       response: { error: { code: 'INTERNAL_ERROR' } },
     });
     expect(storage.remove).toHaveBeenCalledWith([oldKey]);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     expect(db.uploadSession.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: expect.objectContaining({ storageKey: oldKey }) }),
+      objectContaining({ where: objectContaining({ storageKey: oldKey }) }),
     );
   });
 
@@ -426,18 +426,16 @@ describe('UploadsService', () => {
     await expect(subject.prepare(owner, input)).rejects.toBeInstanceOf(ApiException);
 
     expect(db.uploadSession.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        data: expect.objectContaining({
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-          storageKey: expect.stringMatching(
+      objectContaining({
+        data: objectContaining({
+          storageKey: stringMatching(
             /^rooms\/33333333-3333-4333-8333-333333333333\/objects\/[0-9a-f-]{36}$/u,
           ),
         }),
       }),
     );
     expect(db.uploadSession.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { status: 'REJECTED' } }),
+      objectContaining({ data: { status: 'REJECTED' } }),
     );
     expect(storage.createSignedUpload).toHaveBeenCalledOnce();
   });
@@ -506,7 +504,7 @@ describe('UploadsService', () => {
     });
     await subject.cancel(owner, '66666666-6666-4666-8666-666666666666');
     expect(db.uploadSession.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { status: 'CANCELLED' } }),
+      objectContaining({ data: { status: 'CANCELLED' } }),
     );
   });
 

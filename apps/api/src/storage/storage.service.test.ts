@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SupabaseStorageService } from './supabase-storage.service.js';
 
+function objectContaining<T extends object>(value: T): T {
+  return expect.objectContaining(value) as T;
+}
+
 describe('SupabaseStorageService', () => {
   it('creates a non-upsert signed upload capability and derives the TUS endpoint', async () => {
     const createSignedUploadUrl = vi.fn().mockResolvedValue({
@@ -72,9 +76,8 @@ describe('SupabaseStorageService', () => {
 
     expect(fetchImpl).toHaveBeenCalledWith(
       'https://project.supabase.co/storage/v1/object/data-room-pdfs/rooms/r/objects/o',
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-      expect.objectContaining({
-        headers: expect.objectContaining({
+      objectContaining({
+        headers: objectContaining({
           Range: 'bytes=0-4',
           Authorization: `Bearer ${serviceRoleKey}`,
           apikey: serviceRoleKey,
