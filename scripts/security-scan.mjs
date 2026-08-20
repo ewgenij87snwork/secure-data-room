@@ -34,6 +34,8 @@ const scannedExtensions = new Set([
   '.zsh',
 ]);
 const scannedNames = new Set(['Dockerfile', 'Makefile', 'Procfile']);
+const credentialFileNames =
+  /^(?:credentials?|secrets?|service-account|id_(?:rsa|dsa)|private-key)(?:[._-].*)?$/iu;
 const patterns = [
   ['private key', /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/u],
   ['Supabase secret key', /\bsb_secret_[A-Za-z0-9_-]{20,}\b/u],
@@ -61,6 +63,7 @@ export function classifyTrackedPath(path) {
     return fileName.endsWith('.example') ? 'scan' : 'reject';
   }
   if (credentialExtensions.has(extension)) return 'reject';
+  if (credentialFileNames.test(fileName)) return 'reject';
   if (scannedNames.has(fileName) || scannedExtensions.has(extension)) return 'scan';
   return 'ignore';
 }
@@ -78,7 +81,7 @@ async function listRepositoryFiles() {
   return stdout.split('\0').filter(Boolean).map(normalizePath);
 }
 
-function scanText(path, text) {
+export function scanText(path, text) {
   const failures = [];
   for (const [label, pattern] of patterns) {
     if (pattern.test(text)) failures.push(`${path}: ${label}`);

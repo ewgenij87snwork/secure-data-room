@@ -24,8 +24,22 @@ export function getEnv(): AppEnv {
 }
 
 export function getAllowedOrigins(): string[] {
-  return getEnv()
-    .WEB_ORIGINS.split(',')
+  return parseAllowedOrigins(getEnv().WEB_ORIGINS);
+}
+
+export function parseAllowedOrigins(value: string): string[] {
+  const origins = value
+    .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
+
+  if (origins.length === 0) throw new Error('WEB_ORIGINS must contain an origin.');
+
+  return origins.map((origin) => {
+    const parsed = new URL(origin);
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.origin !== origin) {
+      throw new Error('WEB_ORIGINS must contain exact HTTP(S) origins.');
+    }
+    return parsed.origin;
+  });
 }

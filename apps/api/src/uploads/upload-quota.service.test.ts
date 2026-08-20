@@ -79,4 +79,15 @@ describe('UploadQuotaService', () => {
     ).resolves.toBeUndefined();
     expect(query.mock.calls[0]?.[0]?.strings.join('')).toContain('sum("expectedSizeBytes")');
   });
+
+  it('rejects when the quota query returns no row instead of failing open', async () => {
+    const tx = { $queryRaw: vi.fn().mockResolvedValue([]) } as never;
+
+    await expect(
+      new UploadQuotaService().assertBatchFits(tx, '11111111-1111-4111-8111-111111111111', 1, 1),
+    ).rejects.toMatchObject({
+      response: { error: { code: 'INTERNAL_ERROR' } },
+      status: HttpStatus.SERVICE_UNAVAILABLE,
+    });
+  });
 });
