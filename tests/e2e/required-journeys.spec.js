@@ -118,6 +118,15 @@ async function deleteListedNode(page, node) {
   return impact.json();
 }
 
+async function expectNodeReadDenied(page, nodeId, expectedStates = [403, 404]) {
+  const denied = waitForNodeRead(page, nodeId);
+  await page.goto(`/workspace/${nodeId}`);
+  expect(expectedStates).toContain((await denied).status());
+  await expect(
+    page.getByText(/forbidden|not authorized|not found|no longer available/i),
+  ).toBeVisible();
+}
+
 async function cleanupOwnerRun(browser) {
   const context = await actorContext(browser, 'owner');
   try {
@@ -387,7 +396,7 @@ test.describe('P6-T3 required journeys', () => {
       const firstRead = waitForNodeRead(viewerPage, target.id);
       await viewerPage.goto(target.url);
       expect((await firstRead).ok()).toBe(true);
-      await expect(viewerPage.getByRole('banner')).toContainText(/read-only/i);
+      await expect(viewerPage.getByRole('status')).toContainText(/read-only/i);
       await expect(viewerPage.getByRole('heading', { name: target.name })).toBeVisible();
       await expect(
         viewerPage.getByRole('button', { name: /new folder|upload|rename|move|delete|share/i }),
@@ -399,6 +408,98 @@ test.describe('P6-T3 required journeys', () => {
       expect([403, 404, 410]).toContain((await revokedRead).status());
       await expect(viewerPage.getByText(/revoked|no longer available/i)).toBeVisible();
       await expect(viewerPage.getByText(target.name, { exact: true })).toHaveCount(0);
+    } finally {
+      await viewer.close();
+      await owner.close();
+    }
+  });
+
+  test('Viewer B: Shared with me exposes only the permissioned target and stays read-only', async ({
+    browser,
+  }) => {
+    const owner = await actorContext(browser, 'owner');
+    const viewer = await actorContext(browser, 'viewer');
+    try {
+      const ownerPage = await owner.newPage();
+      await ownerPage.goto('/');
+      const target = await createFolder(ownerPage, uniqueRunName('shared-with-me'), {
+        open: false,
+      });
+      await openNode(ownerPage, target);
+      const descendant = await createFolder(ownerPage, uniqueRunName('shared-descendant'), {
+        open: false,
+      });
+      await ownerPage.goto('/workspace');
+      const sibling = await createFolder(ownerPage, uniqueRunName('shared-sibling'), {
+        open: false,
+      });
+      await openNode(ownerPage, target);
+      const share = await shareWithViewer(ownerPage);
+
+      const viewerPage = await viewer.newPage();
+      // Frozen sharing contract: the recipient discovers grants from the protected
+      // "Shared with me" surface; the current route design remains /workspace/:nodeId.
+      await viewerPage.goto('/workspace');
+      const sharedLink = viewerPage.getByRole('link', { name: /shared with me/i });
+      await expect(sharedLink).toBeVisible();
+      await sharedLink.click();
+      await expect(viewerPage.getByRole('link', { name: target.name, exact: true })).toBeVisible();
+      await expect(
+        viewerPage.getByRole('link', { name: descendant.name, exact: true }),
+      ).toHaveCount(0);
+      await expect(viewerPage.getByRole('link', { name: sibling.name, exact: true })).toHaveCount(
+        0,
+      );
+      await viewerPage.getByRole('link', { name: target.name, exact: true }).click();
+      await expect(viewerPage.getByRole('status')).toContainText(/read-only/i);
+      await expect(
+        viewerPage.getByRole('link', { name: descendant.name, exact: true }),
+      ).toBeVisible();
+      await expect(viewerPage.getByRole('link', { name: sibling.name, exact: true })).toHaveCount(
+        0,
+      );
+      await expect(
+        viewerPage.getByRole('button', { name: /new folder|upload|rename|move|delete|share/i }),
+      ).toHaveCount(0);
+
+      await revokeShare(ownerPage, share, share.recipient);
+    } finally {
+      await viewer.close();
+      await owner.close();
+    }
+  });
+
+  test('Viewer B cannot traverse from a shared nested target to its ancestor or sibling', async ({
+    browser,
+  }) => {
+    const owner = await actorContext(browser, 'owner');
+    const viewer = await actorContext(browser, 'viewer');
+    try {
+      const ownerPage = await owner.newPage();
+      await ownerPage.goto('/');
+      const ancestor = await createFolder(ownerPage, uniqueRunName('boundary-parent'));
+      const target = await createFolder(ownerPage, uniqueRunName('boundary-target'), {
+        open: false,
+      });
+      await ownerPage.goto('/workspace');
+      const sibling = await createFolder(ownerPage, uniqueRunName('boundary-sibling'), {
+        open: false,
+      });
+      await openNode(ownerPage, target);
+      const targetUrl = ownerPage.url();
+      const share = await shareWithViewer(ownerPage);
+
+      const viewerPage = await viewer.newPage();
+      const firstRead = waitForNodeRead(viewerPage, target.id);
+      await viewerPage.goto(targetUrl);
+      expect((await firstRead).ok()).toBe(true);
+      await expect(viewerPage.getByRole('heading', { name: target.name })).toBeVisible();
+      await expectNodeReadDenied(viewerPage, ancestor.id);
+      await expectNodeReadDenied(viewerPage, sibling.id);
+      await expect(viewerPage.getByText(ancestor.name, { exact: true })).toHaveCount(0);
+      await expect(viewerPage.getByText(sibling.name, { exact: true })).toHaveCount(0);
+
+      await revokeShare(ownerPage, share, share.recipient);
     } finally {
       await viewer.close();
       await owner.close();
@@ -424,6 +525,32 @@ test.describe('P6-T3 required journeys', () => {
     } finally {
       await unrelated.close();
       await owner.close();
+    }
+  });
+
+  test('Owner A: core workspace remains usable at mobile and desktop widths', async ({
+    browser,
+  }) => {
+    const context = await actorContext(browser, 'owner');
+    try {
+      const page = await context.newPage({ viewport: { width: 390, height: 844 } });
+      await page.goto('/');
+      await expect(page.getByRole('main')).toBeVisible();
+      await expect(page.getByRole('heading').first()).toBeVisible();
+      await expect(page.locator('input[type="file"]')).toBeAttached();
+      await expect(page.getByRole('button', { name: /new folder|create folder/i })).toBeVisible();
+      expect(
+        await page.evaluate(() => globalThis.document.documentElement.scrollWidth),
+      ).toBeLessThanOrEqual(390);
+
+      await page.setViewportSize({ width: 1440, height: 900 });
+      await expect(page.getByRole('main')).toBeVisible();
+      await expect(page.getByRole('navigation').first()).toBeVisible();
+      expect(
+        await page.evaluate(() => globalThis.document.documentElement.scrollWidth),
+      ).toBeLessThanOrEqual(1440);
+    } finally {
+      await context.close();
     }
   });
 
