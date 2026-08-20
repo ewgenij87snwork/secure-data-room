@@ -10,6 +10,7 @@ import { JwtAuthGuard } from './auth/jwt-auth.guard.js';
 import { authenticatedPrincipal, type AuthenticatedPrincipal } from './auth/principal.js';
 import { PrismaService } from './database/prisma.service.js';
 import { MeService } from './me/me.service.js';
+import { AccessPolicyService } from './access-control/access-policy.service.js';
 
 const principal = authenticatedPrincipal(
   '11111111-1111-4111-8111-111111111111',
@@ -58,6 +59,8 @@ describe('AppModule identity bootstrap', () => {
         },
       })
       .compile();
+
+    expect(moduleRef.get(AccessPolicyService)).toBeInstanceOf(AccessPolicyService);
 
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('v1');
