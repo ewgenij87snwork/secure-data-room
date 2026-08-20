@@ -21,6 +21,10 @@ export function WorkspaceSidebar({
         <FolderRoot size={18} strokeWidth={1.8} aria-hidden="true" />
         <span>All files</span>
       </NavLink>
+      <NavLink className="workspace-nav-link" to="/shared">
+        <ShieldCheck size={18} strokeWidth={1.8} aria-hidden="true" />
+        <span>Shared with me</span>
+      </NavLink>
       <p className="workspace-sidebar__assurance">Private by default. Shared deliberately.</p>
     </div>
   );

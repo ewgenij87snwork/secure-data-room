@@ -17,6 +17,8 @@ export function NodeBrowser({
   onRename,
   onDelete,
   onMove,
+  resolveDestination,
+  onOpen,
 }: Readonly<{
   nodes: readonly NodeSummary[];
   canManage: boolean;
@@ -30,6 +32,8 @@ export function NodeBrowser({
   onRename: (node: NodeSummary, returnFocusElement: HTMLElement | null) => void;
   onDelete: (node: NodeSummary, returnFocusElement: HTMLElement | null) => void;
   onMove?: (node: NodeSummary, returnFocusElement: HTMLElement | null) => void;
+  resolveDestination?: (node: NodeSummary) => string;
+  onOpen?: (node: NodeSummary) => void;
 }>): React.JSX.Element {
   const items = nodes.map((node) => toNodeViewModel(node, canManage));
 
@@ -79,8 +83,22 @@ export function NodeBrowser({
           Refreshing…
         </span>
       ) : null}
-      <NodeTable items={items} onRename={onRename} onDelete={onDelete} onMove={onMove} />
-      <NodeCardList items={items} onRename={onRename} onDelete={onDelete} onMove={onMove} />
+      <NodeTable
+        items={items}
+        onRename={onRename}
+        onDelete={onDelete}
+        onMove={onMove}
+        resolveDestination={resolveDestination}
+        onOpen={onOpen}
+      />
+      <NodeCardList
+        items={items}
+        onRename={onRename}
+        onDelete={onDelete}
+        onMove={onMove}
+        resolveDestination={resolveDestination}
+        onOpen={onOpen}
+      />
       {hasNextPage ? (
         <button
           className="secondary-button node-browser__load-more"

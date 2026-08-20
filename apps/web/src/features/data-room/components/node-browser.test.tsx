@@ -1,5 +1,5 @@
 import type { NodeSummary } from '@data-room/contracts';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
@@ -84,6 +84,28 @@ describe('NodeBrowser', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('could not be refreshed');
     await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(retry).toHaveBeenCalledOnce();
+  });
+
+  it('opens public nodes in place without changing the public URL', () => {
+    const onOpen = vi.fn();
+    render(
+      <MemoryRouter initialEntries={['/share']}>
+        <NodeBrowser
+          nodes={[folder, file]}
+          canManage={false}
+          resolveDestination={() => '/share'}
+          onOpen={onOpen}
+          onRename={vi.fn()}
+          onDelete={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getAllByRole('link', { name: folder.name })[0]!);
+
+    expect(onOpen).toHaveBeenCalledWith(folder);
+    expect(window.location.pathname).toBe('/');
+    expect(window.location.search).toBe('');
   });
 });
 

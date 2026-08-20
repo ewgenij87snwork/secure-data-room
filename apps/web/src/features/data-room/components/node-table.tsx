@@ -9,11 +9,15 @@ export function NodeTable({
   onRename,
   onDelete,
   onMove,
+  resolveDestination,
+  onOpen,
 }: Readonly<{
   items: readonly NodeItemViewModel[];
   onRename: (node: NodeSummary, returnFocusElement: HTMLElement | null) => void;
   onDelete: (node: NodeSummary, returnFocusElement: HTMLElement | null) => void;
   onMove: ((node: NodeSummary, returnFocusElement: HTMLElement | null) => void) | undefined;
+  resolveDestination?: ((node: NodeSummary) => string) | undefined;
+  onOpen?: ((node: NodeSummary) => void) | undefined;
 }>): React.JSX.Element {
   return (
     <div className="node-table-wrap">
@@ -33,7 +37,7 @@ export function NodeTable({
           {items.map((item) => (
             <tr key={item.id}>
               <td>
-                <NodeName item={item} />
+                <NodeName item={item} resolveDestination={resolveDestination} onOpen={onOpen} />
               </td>
               <td>{item.modifiedLabel}</td>
               <td>

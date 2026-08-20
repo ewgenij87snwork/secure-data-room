@@ -1,4 +1,5 @@
 const STORAGE_KEY = 'data-room:public-share-token';
+const GENERATION_KEY = 'data-room:public-share-generation';
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 
 function isValidPublicShareToken(value: string | null): value is string {
@@ -16,7 +17,9 @@ export function capturePublicShareToken(location: Location = window.location): s
       return null;
     }
 
+    const previous = sessionStorage.getItem(STORAGE_KEY);
     sessionStorage.setItem(STORAGE_KEY, token);
+    if (previous !== token) sessionStorage.setItem(GENERATION_KEY, crypto.randomUUID());
     return token;
   }
 
@@ -26,9 +29,17 @@ export function capturePublicShareToken(location: Location = window.location): s
     return null;
   }
 
+  if (!sessionStorage.getItem(GENERATION_KEY))
+    sessionStorage.setItem(GENERATION_KEY, crypto.randomUUID());
+
   return storedToken;
 }
 
 export function clearPublicShareToken(): void {
   sessionStorage.removeItem(STORAGE_KEY);
+  sessionStorage.removeItem(GENERATION_KEY);
+}
+
+export function publicShareSessionGeneration(): string | null {
+  return sessionStorage.getItem(GENERATION_KEY);
 }

@@ -20,6 +20,7 @@ import { UploadDropzone } from '../uploads/components/upload-dropzone.js';
 import { useOptionalUploadQueue } from '../uploads/upload-queue-context.js';
 import { shouldShowUploadDropzone } from './data-room-upload-visibility.js';
 import { useOnlineStatus } from '../../lib/online-status-hook.js';
+import { ShareDialog } from '../sharing/components/share-dialog.js';
 
 interface SelectedNode {
   node: NodeSummary;
@@ -42,6 +43,7 @@ export function DataRoomRoute(): React.JSX.Element {
   const [renameTarget, setRenameTarget] = useState<SelectedNode | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SelectedNode | null>(null);
   const [moveTarget, setMoveTarget] = useState<SelectedNode | null>(null);
+  const [shareReturnFocus, setShareReturnFocus] = useState<HTMLButtonElement | null>(null);
   const accountLabel = bootstrap.user.displayName ?? bootstrap.user.email;
   const currentNode = nodeQuery.data;
   const canManage = currentNode?.accessRole === 'OWNER' && !bootstrap.runtime.maintenanceMode;
@@ -125,8 +127,13 @@ export function DataRoomRoute(): React.JSX.Element {
               {currentNode.name}
             </h1>
           </div>
-          {isFolder ? (
-            <FolderToolbar canManage={canMutate} onCreateFolder={setCreateReturnFocus} />
+          {canMutate ? (
+            <FolderToolbar
+              canManage={canMutate}
+              onCreateFolder={setCreateReturnFocus}
+              onShare={setShareReturnFocus}
+              showCreateFolder={isFolder}
+            />
           ) : null}
         </div>
         {breadcrumbsQuery.isError ? (
@@ -220,6 +227,16 @@ export function DataRoomRoute(): React.JSX.Element {
           node={moveTarget.node}
           currentFolderId={currentNode.id}
           returnFocusElement={moveTarget.returnFocusElement}
+        />
+      ) : null}
+      {shareReturnFocus && canMutate ? (
+        <ShareDialog
+          node={currentNode}
+          open
+          onOpenChange={(open) => {
+            if (!open) setShareReturnFocus(null);
+          }}
+          returnFocusElement={shareReturnFocus}
         />
       ) : null}
     </>,
