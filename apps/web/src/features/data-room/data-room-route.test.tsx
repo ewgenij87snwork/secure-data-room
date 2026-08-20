@@ -147,6 +147,52 @@ describe('DataRoomRoute', () => {
     expect(await screen.findByRole('heading', { name: 'Due diligence' })).toBeVisible();
   });
 
+  it.each(['ACCESS_DENIED', 'RESOURCE_GONE', 'RESOURCE_NOT_FOUND'] as const)(
+    'hides cached protected content after a terminal %s refetch error',
+    async (code) => {
+      const current = node({ id: rootId, parentId: null, name: 'Due diligence' });
+      let nodeReads = 0;
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((input: RequestInfo | URL) => {
+          const url = requestUrl(input);
+          if (url.pathname.endsWith(`/nodes/${rootId}`) && !url.pathname.includes('/children')) {
+            nodeReads += 1;
+            return nodeReads === 1
+              ? Promise.resolve(jsonResponse(current))
+              : Promise.resolve(
+                  jsonResponse(
+                    {
+                      error: {
+                        code,
+                        message: 'terminal',
+                        requestId: '00000000-0000-4000-8000-000000000001',
+                      },
+                    },
+                    403,
+                  ),
+                );
+          }
+          return routeResponse(input, current, []);
+        }),
+      );
+
+      await renderRoute();
+      expect(await screen.findByRole('heading', { name: 'Due diligence' })).toBeVisible();
+      await act(() => Promise.resolve(window.dispatchEvent(new Event('offline'))));
+      await act(() => Promise.resolve(window.dispatchEvent(new Event('online'))));
+      await userEvent.click(screen.getByRole('button', { name: 'Refresh now' }));
+
+      expect(
+        await screen.findByRole('heading', {
+          name: /no longer available|access is no longer available/i,
+        }),
+      ).toBeVisible();
+      expect(screen.queryByRole('heading', { name: 'Due diligence' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'New folder' })).not.toBeInTheDocument();
+    },
+  );
+
   it('passes the mounted folder id as the move tree current target', async () => {
     const current = node({ id: folderId, parentId: rootId, name: 'Contracts' });
     const file = node({

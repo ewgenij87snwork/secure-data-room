@@ -4,10 +4,12 @@ export function PublicLinkPanel({
   url,
   onCreate,
   isCreating,
+  disabled,
 }: {
   url?: string;
   onCreate: () => void;
   isCreating?: boolean;
+  disabled?: boolean;
 }): React.JSX.Element {
   const [copied, setCopied] = useState(false);
   const copy = async () => {
@@ -38,7 +40,12 @@ export function PublicLinkPanel({
           </button>
         </div>
       ) : (
-        <button className="primary-button" type="button" onClick={onCreate} disabled={isCreating}>
+        <button
+          className="primary-button"
+          type="button"
+          onClick={onCreate}
+          disabled={disabled === true || isCreating === true}
+        >
           {isCreating ? 'Creating…' : 'Create public link'}
         </button>
       )}

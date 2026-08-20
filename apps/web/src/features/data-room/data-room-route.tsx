@@ -54,6 +54,7 @@ export function DataRoomRoute(): React.JSX.Element {
     nodeKind: currentNode?.kind,
   });
   const children = childrenQuery.data?.pages.flatMap((page) => page.items) ?? [];
+  const terminalNodeError = isTerminalNodeError(nodeQuery.error);
 
   const shell = (content: React.ReactNode, context?: React.ReactNode): React.JSX.Element => (
     <WorkspaceShell
@@ -84,7 +85,7 @@ export function DataRoomRoute(): React.JSX.Element {
     );
   }
 
-  if (!currentNode) {
+  if (!currentNode || terminalNodeError) {
     const state = nodeErrorState(nodeQuery.error);
     return shell(
       <section className="workspace-state" aria-labelledby="workspace-title">
@@ -266,4 +267,11 @@ function nodeErrorState(
     message: 'The connection could not be completed. Please try again.',
     recoverable: true,
   };
+}
+
+function isTerminalNodeError(error: unknown): boolean {
+  return (
+    error instanceof ApiClientError &&
+    ['ACCESS_DENIED', 'RESOURCE_GONE', 'RESOURCE_NOT_FOUND'].includes(error.code)
+  );
 }

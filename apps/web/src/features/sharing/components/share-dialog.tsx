@@ -10,6 +10,7 @@ import {
   useRevokeShare,
   useShares,
 } from '../queries.js';
+import { useOnlineStatus } from '../../../lib/online-status-hook.js';
 
 export function ShareDialog({
   node,
@@ -26,10 +27,12 @@ export function ShareDialog({
   const pub = useCreatePublicShare(node.id);
   const user = useCreatePermissionedShare(node.id);
   const revoke = useRevokeShare(node.id);
+  const isOnline = useOnlineStatus();
   const [url, setUrl] = useState('');
   const [revokingShareId, setRevokingShareId] = useState<string | null>(null);
   const handleRevokeSuccess = () => setRevokingShareId(null);
   const handleRevoke = (id: string) => {
+    if (!isOnline) return;
     setRevokingShareId(id);
     revoke.mutate(id, { onSuccess: handleRevokeSuccess });
   };
@@ -49,25 +52,33 @@ export function ShareDialog({
         ) : null}
         <PublicLinkPanel
           url={url}
-          onCreate={() => pub.mutate(undefined, { onSuccess: (result) => setUrl(result.url) })}
+          onCreate={() => {
+            if (isOnline) pub.mutate(undefined, { onSuccess: (result) => setUrl(result.url) });
+          }}
           isCreating={pub.isPending}
+          disabled={!isOnline}
         />
         <PermissionedShareForm
-          onSubmit={(email) => user.mutate({ email })}
+          onSubmit={(email) => {
+            if (isOnline) user.mutate({ email });
+          }}
           isSubmitting={user.isPending}
+          disabled={!isOnline}
           error={user.error ? 'This email could not be granted access.' : null}
         />
         <ActiveShareList
           shares={shares.data?.items ?? []}
           onRevoke={handleRevoke}
-          isRevoking={revoke.isPending}
+          isRevoking={revoke.isPending || !isOnline}
           isLoading={shares.isLoading}
           error={Boolean(shares.error)}
           onRetry={() => void shares.refetch()}
           revokingShareId={revokingShareId}
           revokeError={Boolean(revoke.error)}
           onRetryRevoke={() => {
-            if (revokingShareId) revoke.mutate(revokingShareId, { onSuccess: handleRevokeSuccess });
+            if (isOnline && revokingShareId) {
+              revoke.mutate(revokingShareId, { onSuccess: handleRevokeSuccess });
+            }
           }}
         />
       </div>

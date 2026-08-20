@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { ResponsiveDialog } from '../../../components/ui/responsive-dialog.js';
 import { mutationErrorMessage, parseNodeName, suggestedNodeName } from '../dialog-helpers.js';
 import { useCreateFolder } from '../data-room-queries.js';
+import { useOnlineStatus } from '../../../lib/online-status-hook.js';
 
 export function CreateFolderDialog({
   open,
@@ -17,6 +18,7 @@ export function CreateFolderDialog({
   const [name, setName] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
   const mutation = useCreateFolder();
+  const isOnline = useOnlineStatus();
   const parsedName = parseNodeName(name);
   const suggestion = suggestedNodeName(mutation.error);
 
@@ -40,7 +42,7 @@ export function CreateFolderDialog({
         className="management-form"
         onSubmit={(event) => {
           event.preventDefault();
-          if (!parsedName) return;
+          if (!isOnline || !parsedName) return;
           mutation.mutate({ parentId, name: parsedName }, { onSuccess: () => changeOpen(false) });
         }}
       >
@@ -82,7 +84,7 @@ export function CreateFolderDialog({
           <button
             className="primary-button"
             type="submit"
-            disabled={!parsedName || mutation.isPending}
+            disabled={!isOnline || !parsedName || mutation.isPending}
           >
             {mutation.isPending ? 'Creating…' : 'Create folder'}
           </button>

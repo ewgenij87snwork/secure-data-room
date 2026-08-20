@@ -4,10 +4,12 @@ export function PermissionedShareForm({
   onSubmit,
   isSubmitting,
   error,
+  disabled,
 }: {
   onSubmit: (email: string) => void;
   isSubmitting?: boolean;
   error?: string | null;
+  disabled?: boolean;
 }): React.JSX.Element {
   const [email, setEmail] = useState('');
   return (
@@ -34,7 +36,11 @@ export function PermissionedShareForm({
           onChange={(event) => setEmail(event.target.value)}
           placeholder="name@company.com"
         />
-        <button className="primary-button" type="submit" disabled={isSubmitting}>
+        <button
+          className="primary-button"
+          type="submit"
+          disabled={disabled === true || isSubmitting === true}
+        >
           {isSubmitting ? 'Sharing…' : 'Share'}
         </button>
       </div>

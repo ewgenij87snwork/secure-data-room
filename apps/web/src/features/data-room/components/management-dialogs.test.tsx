@@ -60,6 +60,44 @@ describe('management dialogs', () => {
     expect(input).toHaveValue('Legal (1)');
   });
 
+  it('guards an open create-folder mutation after going offline', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(folderNode()));
+    vi.stubGlobal('fetch', fetchMock);
+    const { CreateFolderDialog } = await import('./create-folder-dialog.js');
+    renderWithClient(<CreateFolderDialog open onOpenChange={vi.fn()} parentId={parentId} />);
+    await userEvent.type(screen.getByRole('textbox', { name: 'Folder name' }), 'Offline folder');
+
+    window.dispatchEvent(new Event('offline'));
+
+    const submit = await screen.findByRole('button', { name: 'Create folder' });
+    expect(submit).toBeDisabled();
+    await userEvent.click(submit);
+    expect(fetchMock).not.toHaveBeenCalled();
+    window.dispatchEvent(new Event('online'));
+  });
+
+  it('guards every open share mutation after going offline', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ items: [shareSummary()] }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { ShareDialog } = await import('../../sharing/components/share-dialog.js');
+    renderWithClient(<ShareDialog node={folderNode()} open onOpenChange={vi.fn()} />);
+    await screen.findByText('Public link');
+
+    window.dispatchEvent(new Event('offline'));
+
+    expect(await screen.findByRole('button', { name: 'Create public link' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Share' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Revoke' })).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Create public link' }));
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'Email address' }),
+      'person@example.com',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Share' }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    window.dispatchEvent(new Event('online'));
+  });
+
   it('waits for and renders every exact delete impact count before enabling deletion', async () => {
     const impact = {
       rootNodeId: nodeId,
@@ -225,5 +263,18 @@ function folderNode(): NodeSummary {
     updatedAt: '2026-01-02T00:00:00.000Z',
     isShared: false,
     accessRole: 'OWNER',
+  };
+}
+
+function shareSummary() {
+  return {
+    id: nodeId,
+    targetNodeId: nodeId,
+    targetName: 'Legal',
+    principalType: 'PUBLIC_LINK' as const,
+    role: 'VIEWER' as const,
+    recipientEmail: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    revokedAt: null,
   };
 }
