@@ -14,19 +14,7 @@ import {
 } from '../runtime-controls/runtime-controls.service.js';
 import { ApiException } from '../common/api-exception.js';
 import { normalizedNodeName, suffixedNodeName } from './node-name.service.js';
-
-interface NodeRow {
-  id: string;
-  dataRoomId: string;
-  parentId: string | null;
-  kind: 'FOLDER' | 'FILE';
-  name: string;
-  sizeBytes: bigint | null;
-  mimeType: string | null;
-  revision: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
+import { toNodeSummary, type NodeRow } from './node-summary.js';
 
 interface ParentProof {
   dataRoomId: string;
@@ -132,7 +120,7 @@ export class NodesService {
         storageKey: null,
       },
     });
-    return toNodeSummary(node);
+    return toNodeSummary(node, 'OWNER');
   }
 
   private async nameConflict(access: OwnedFolder, name: string): Promise<ApiException> {
@@ -189,23 +177,6 @@ async function proveParent(
     throw new AccessDeniedException();
   }
   return parent;
-}
-
-function toNodeSummary(node: NodeRow): NodeSummary {
-  return {
-    id: node.id,
-    dataRoomId: node.dataRoomId,
-    parentId: node.parentId,
-    kind: node.kind,
-    name: node.name,
-    sizeBytes: node.sizeBytes === null ? null : node.sizeBytes.toString(),
-    mimeType: node.mimeType as 'application/pdf' | null,
-    revision: node.revision,
-    createdAt: node.createdAt.toISOString(),
-    updatedAt: node.updatedAt.toISOString(),
-    isShared: false,
-    accessRole: 'OWNER',
-  };
 }
 
 function isUniqueConflict(error: unknown): boolean {

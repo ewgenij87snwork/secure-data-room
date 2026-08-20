@@ -37,6 +37,11 @@ export const listNodesResponseSchema = z.object({
   pageInfo: pageInfoSchema,
 });
 
+export const listNodeChildrenResponseSchema = z.object({
+  items: z.array(nodeSummarySchema),
+  pageInfo: pageInfoSchema,
+});
+
 export const createFolderRequestSchema = z.object({
   parentId: uuidSchema,
   name: nodeNameSchema,
@@ -64,5 +69,6 @@ export type NodeKind = z.infer<typeof nodeKindSchema>;
 export type AccessRole = z.infer<typeof accessRoleSchema>;
 export type NodeSummary = z.infer<typeof nodeSummarySchema>;
 export type ListNodesResponse = z.infer<typeof listNodesResponseSchema>;
+export type ListNodeChildrenResponse = z.infer<typeof listNodeChildrenResponseSchema>;
 export type CreateFolderRequest = z.infer<typeof createFolderRequestSchema>;
 export type DeleteImpact = z.infer<typeof deleteImpactSchema>;
