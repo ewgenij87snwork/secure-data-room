@@ -17,7 +17,12 @@ export function startTusUpload(input: {
     chunkSize: UPLOAD_CHUNK_SIZE,
     retryDelays: [0, 1000, 3000, 5000],
     headers: { 'x-signature': input.uploadToken, 'x-upsert': 'false' },
-    metadata: { bucketName: input.bucketName, objectName: input.storageKey, contentType: 'application/pdf', cacheControl: 'no-store' },
+    metadata: {
+      bucketName: input.bucketName,
+      objectName: input.storageKey,
+      contentType: 'application/pdf',
+      cacheControl: 'no-store',
+    },
     uploadDataDuringCreation: true,
     removeFingerprintOnSuccess: true,
     onProgress: input.onProgress,

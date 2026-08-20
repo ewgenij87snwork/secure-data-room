@@ -60,10 +60,12 @@ export class SupabaseStorageService extends StorageService {
     const response = await this.fetchImpl(url, {
       headers: {
         Range: `bytes=0-${byteCount - 1}`,
-        ...(this.config.SUPABASE_SERVICE_ROLE_KEY ? {
-          Authorization: `Bearer ${this.config.SUPABASE_SERVICE_ROLE_KEY}`,
-          apikey: this.config.SUPABASE_SERVICE_ROLE_KEY,
-        } : {}),
+        ...(this.config.SUPABASE_SERVICE_ROLE_KEY
+          ? {
+              Authorization: `Bearer ${this.config.SUPABASE_SERVICE_ROLE_KEY}`,
+              apikey: this.config.SUPABASE_SERVICE_ROLE_KEY,
+            }
+          : {}),
       },
     });
     if (!response.ok || response.status !== 206) throw new Error('Storage read failed.');

@@ -10,7 +10,10 @@ describe('UploadDropzone', () => {
     const input = screen.getByLabelText('Choose PDF files');
     expect(input).toHaveAttribute('accept', 'application/pdf,.pdf');
     expect(input).toHaveAttribute('multiple');
-    await userEvent.upload(input, new File(['%PDF-test'], 'document.pdf', { type: 'application/pdf' }));
+    await userEvent.upload(
+      input,
+      new File(['%PDF-test'], 'document.pdf', { type: 'application/pdf' }),
+    );
     expect(onFilesSelected).toHaveBeenCalledWith([expect.any(File)]);
     render(<UploadDropzone disabled onFilesSelected={onFilesSelected} />);
     expect(screen.getAllByLabelText('Choose PDF files')[1]).toBeDisabled();

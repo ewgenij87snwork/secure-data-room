@@ -1,4 +1,13 @@
-import { createElement, useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, type ReactNode } from 'react';
+import {
+  createElement,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  type ReactNode,
+} from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth, type AuthContextValue } from '../auth/auth-context.js';
 import { ApiClientError } from '../../lib/api-error.js';
@@ -10,7 +19,9 @@ import type { UploadItem } from './upload-types.js';
 import { validatePdfSelection } from './upload-types.js';
 import { QueueContext } from './upload-queue-context.js';
 import { isFinalizeForClient } from './upload-queue-helpers.js';
-function newClientId(): string { return crypto.randomUUID(); }
+function newClientId(): string {
+  return crypto.randomUUID();
+}
 
 interface Operation {
   generation: number;
@@ -32,7 +43,13 @@ export function UploadQueueProvider({ children }: { children: ReactNode }): Reac
   return createElement(IdentityUploadQueueProvider, { key: userId ?? 'anonymous', auth, children });
 }
 
-function IdentityUploadQueueProvider({ children, auth }: { children: ReactNode; auth: AuthContextValue }): React.JSX.Element {
+function IdentityUploadQueueProvider({
+  children,
+  auth,
+}: {
+  children: ReactNode;
+  auth: AuthContextValue;
+}): React.JSX.Element {
   const queryClient = useQueryClient();
   const [state, dispatch] = useReducer(uploadReducer, initialUploadQueueState);
   const stateRef = useRef(state);
@@ -49,20 +66,38 @@ function IdentityUploadQueueProvider({ children, auth }: { children: ReactNode; 
     tokenRef.current = auth.accessToken;
   }, [auth.accessToken, state]);
 
-  const isCurrent = useCallback((clientId: string, operation: Operation, expected?: UploadItem['state']): boolean => {
-    const current = stateRef.current.items.find((item) => item.clientId === clientId);
-    const phaseMatches = !expected || current?.state === expected || (expected === 'preparing' && current?.state === 'queued');
-    return Boolean(current && !operation.cancelled && operation.generation === generationRef.current && operation.userId === userId && current.attempt === operation.attempt && phaseMatches);
-  }, [userId]);
+  const isCurrent = useCallback(
+    (clientId: string, operation: Operation, expected?: UploadItem['state']): boolean => {
+      const current = stateRef.current.items.find((item) => item.clientId === clientId);
+      const phaseMatches =
+        !expected ||
+        current?.state === expected ||
+        (expected === 'preparing' && current?.state === 'queued');
+      return Boolean(
+        current &&
+        !operation.cancelled &&
+        operation.generation === generationRef.current &&
+        operation.userId === userId &&
+        current.attempt === operation.attempt &&
+        phaseMatches,
+      );
+    },
+    [userId],
+  );
 
   const dispose = useCallback(() => {
     generationRef.current += 1;
-    operations.current.forEach((operation) => { operation.cancelled = true; });
+    operations.current.forEach((operation) => {
+      operation.cancelled = true;
+    });
     transports.current.forEach((transport, clientId) => {
       transport.settle();
       void transport.upload.abort();
       const operation = operations.current.get(clientId);
-      if (operation) void Promise.resolve(cancelUpload(operation.token, transport.sessionId)).catch(() => undefined);
+      if (operation)
+        void Promise.resolve(cancelUpload(operation.token, transport.sessionId)).catch(
+          () => undefined,
+        );
     });
     transports.current.clear();
     operations.current.clear();
@@ -72,80 +107,169 @@ function IdentityUploadQueueProvider({ children, auth }: { children: ReactNode; 
 
   useLayoutEffect(() => () => dispose(), [dispose]);
 
-  const run = useCallback(async (clientId: string): Promise<void> => {
-    const current = stateRef.current.items.find((item) => item.clientId === clientId);
-    if (current?.state !== 'queued' || !auth.accessToken || !userId) return;
-    const operation: Operation = { generation: generationRef.current, userId, token: auth.accessToken, attempt: current.attempt, cancelled: false };
-    operations.current.set(clientId, operation);
-    running.current.add(clientId);
-    dispatch({ type: 'preparing', clientId });
-    try {
-      const prepared = (await prepareUploads(operation.token, { parentId: current.parentId, files: [{ clientId, name: current.file.name, sizeBytes: current.file.size, mimeType: 'application/pdf' }] })).find((candidate) => candidate.clientId === clientId);
-      if (!prepared) throw new Error('The upload could not be prepared.');
-      sessions.current.set(clientId, prepared.sessionId);
-      if (!isCurrent(clientId, operation, 'preparing')) {
-        await Promise.resolve(cancelUpload(operation.token, prepared.sessionId)).catch(() => undefined);
-        return;
-      }
-      let settlePromise!: () => void;
-      const completion = new Promise<void>((resolve, reject) => {
-        settlePromise = () => resolve();
-        const transport = startTusUpload({ file: current.file, tusEndpoint: prepared.tusEndpoint, bucketName: prepared.bucketName, storageKey: prepared.storageKey, uploadToken: prepared.uploadToken, autoStart: false,
-          onProgress: (uploaded, total) => { if (isCurrent(clientId, operation, 'uploading')) dispatch({ type: 'progress', clientId, bytesUploaded: Math.min(uploaded, total) }); },
-          onSuccess: resolve, onError: reject,
+  const run = useCallback(
+    async (clientId: string): Promise<void> => {
+      const current = stateRef.current.items.find((item) => item.clientId === clientId);
+      if (current?.state !== 'queued' || !auth.accessToken || !userId) return;
+      const operation: Operation = {
+        generation: generationRef.current,
+        userId,
+        token: auth.accessToken,
+        attempt: current.attempt,
+        cancelled: false,
+      };
+      operations.current.set(clientId, operation);
+      running.current.add(clientId);
+      dispatch({ type: 'preparing', clientId });
+      try {
+        const prepared = (
+          await prepareUploads(operation.token, {
+            parentId: current.parentId,
+            files: [
+              {
+                clientId,
+                name: current.file.name,
+                sizeBytes: current.file.size,
+                mimeType: 'application/pdf',
+              },
+            ],
+          })
+        ).find((candidate) => candidate.clientId === clientId);
+        if (!prepared) throw new Error('The upload could not be prepared.');
+        sessions.current.set(clientId, prepared.sessionId);
+        if (!isCurrent(clientId, operation, 'preparing')) {
+          await Promise.resolve(cancelUpload(operation.token, prepared.sessionId)).catch(
+            () => undefined,
+          );
+          return;
+        }
+        let settlePromise!: () => void;
+        const completion = new Promise<void>((resolve, reject) => {
+          settlePromise = () => resolve();
+          const transport = startTusUpload({
+            file: current.file,
+            tusEndpoint: prepared.tusEndpoint,
+            bucketName: prepared.bucketName,
+            storageKey: prepared.storageKey,
+            uploadToken: prepared.uploadToken,
+            autoStart: false,
+            onProgress: (uploaded, total) => {
+              if (isCurrent(clientId, operation, 'uploading'))
+                dispatch({ type: 'progress', clientId, bytesUploaded: Math.min(uploaded, total) });
+            },
+            onSuccess: resolve,
+            onError: reject,
+          });
+          transports.current.set(clientId, {
+            upload: transport,
+            settle: settlePromise,
+            sessionId: prepared.sessionId,
+            attempt: operation.attempt,
+          });
+          dispatch({ type: 'uploading', clientId, sessionId: prepared.sessionId });
+          queueMicrotask(() => {
+            if (
+              !operation.cancelled &&
+              operation.generation === generationRef.current &&
+              operation.userId === userId
+            )
+              transport.start();
+          });
         });
-        transports.current.set(clientId, { upload: transport, settle: settlePromise, sessionId: prepared.sessionId, attempt: operation.attempt });
-        dispatch({ type: 'uploading', clientId, sessionId: prepared.sessionId });
-        queueMicrotask(() => {
-          if (!operation.cancelled && operation.generation === generationRef.current && operation.userId === userId) transport.start();
+        await completion;
+        transports.current.delete(clientId);
+        if (!isCurrent(clientId, operation, 'uploading')) return;
+        dispatch({ type: 'finalizing', clientId });
+        const finalizeToken = tokenRef.current;
+        if (!finalizeToken) throw new Error('The upload session expired before finalization.');
+        const finalized = await finalizeUpload(finalizeToken, prepared.sessionId, clientId);
+        if (!isFinalizeForClient(finalized, clientId))
+          throw new Error('Finalize response correlation mismatch.');
+        if (!isCurrent(clientId, operation, 'finalizing')) return;
+        dispatch({
+          type: 'succeeded',
+          clientId,
+          nodeId: finalized.nodeId,
+          finalName: finalized.finalName,
+          conflictResolved: finalized.conflictResolved,
         });
-      });
-      await completion;
-      transports.current.delete(clientId);
-      if (!isCurrent(clientId, operation, 'uploading')) return;
-      dispatch({ type: 'finalizing', clientId });
-      const finalizeToken = tokenRef.current;
-      if (!finalizeToken) throw new Error('The upload session expired before finalization.');
-      const finalized = await finalizeUpload(finalizeToken, prepared.sessionId, clientId);
-      if (!isFinalizeForClient(finalized, clientId)) throw new Error('Finalize response correlation mismatch.');
-      if (!isCurrent(clientId, operation, 'finalizing')) return;
-      dispatch({ type: 'succeeded', clientId, nodeId: finalized.nodeId, finalName: finalized.finalName, conflictResolved: finalized.conflictResolved });
-      await queryClient.invalidateQueries({ queryKey: nodeKeys.children(current.parentId) });
-    } catch (error) {
-      if (isCurrent(clientId, operation)) {
-        const errorCode = error instanceof ApiClientError ? error.code : undefined;
-        dispatch({ type: 'failed', clientId, ...(errorCode ? { errorCode } : {}), errorMessage: error instanceof ApiClientError ? 'The upload could not be completed. Try again.' : 'The upload failed. Try again.' });
+        await queryClient.invalidateQueries({ queryKey: nodeKeys.children(current.parentId) });
+      } catch (error) {
+        if (isCurrent(clientId, operation)) {
+          const errorCode = error instanceof ApiClientError ? error.code : undefined;
+          dispatch({
+            type: 'failed',
+            clientId,
+            ...(errorCode ? { errorCode } : {}),
+            errorMessage:
+              error instanceof ApiClientError
+                ? 'The upload could not be completed. Try again.'
+                : 'The upload failed. Try again.',
+          });
+        }
+      } finally {
+        const active = operations.current.get(clientId);
+        if (active === operation) {
+          operations.current.delete(clientId);
+          transports.current.delete(clientId);
+          running.current.delete(clientId);
+        }
       }
-    } finally {
-      const active = operations.current.get(clientId);
-      if (active === operation) { operations.current.delete(clientId); transports.current.delete(clientId); running.current.delete(clientId); }
-    }
-  }, [auth.accessToken, isCurrent, queryClient, userId]);
+    },
+    [auth.accessToken, isCurrent, queryClient, userId],
+  );
 
   useEffect(() => {
     if (!auth.accessToken || !userId) return;
     const available = 3 - running.current.size;
-    state.items.filter((item) => item.state === 'queued').slice(0, Math.max(0, available)).forEach((item) => void run(item.clientId));
+    state.items
+      .filter((item) => item.state === 'queued')
+      .slice(0, Math.max(0, available))
+      .forEach((item) => void run(item.clientId));
   }, [auth.accessToken, run, state, userId]);
 
   const addFiles = useCallback(async (parentId: string, files: readonly File[]) => {
     const selection = await validatePdfSelection(files);
     dispatch({ type: 'intake-errors', errors: selection.errors });
-    if (selection.valid.length > 0) dispatch({ type: 'add', items: selection.valid.map<UploadItem>((file) => ({ clientId: newClientId(), parentId, file, state: 'queued', bytesUploaded: 0, percent: 0, attempt: 0 })) });
+    if (selection.valid.length > 0)
+      dispatch({
+        type: 'add',
+        items: selection.valid.map<UploadItem>((file) => ({
+          clientId: newClientId(),
+          parentId,
+          file,
+          state: 'queued',
+          bytesUploaded: 0,
+          percent: 0,
+          attempt: 0,
+        })),
+      });
   }, []);
 
-  const retry = useCallback((clientId: string) => {
-    const current = stateRef.current.items.find((item) => item.clientId === clientId);
-    if (current?.state !== 'failed') return;
-    const oldSession = sessions.current.get(clientId) ?? current.sessionId;
-    const token = tokenRef.current;
-    const retryGeneration = generationRef.current;
-    const retryUserId = userId;
-    void (async () => {
-      if (oldSession && token) await Promise.resolve(cancelUpload(token, oldSession)).catch(() => undefined);
-      if (retryGeneration === generationRef.current && retryUserId === userId && token === tokenRef.current && stateRef.current.items.some((item) => item.clientId === clientId && item.state === 'failed')) dispatch({ type: 'retry', clientId });
-    })();
-  }, [userId]);
+  const retry = useCallback(
+    (clientId: string) => {
+      const current = stateRef.current.items.find((item) => item.clientId === clientId);
+      if (current?.state !== 'failed') return;
+      const oldSession = sessions.current.get(clientId) ?? current.sessionId;
+      const token = tokenRef.current;
+      const retryGeneration = generationRef.current;
+      const retryUserId = userId;
+      void (async () => {
+        if (oldSession && token)
+          await Promise.resolve(cancelUpload(token, oldSession)).catch(() => undefined);
+        if (
+          retryGeneration === generationRef.current &&
+          retryUserId === userId &&
+          token === tokenRef.current &&
+          stateRef.current.items.some(
+            (item) => item.clientId === clientId && item.state === 'failed',
+          )
+        )
+          dispatch({ type: 'retry', clientId });
+      })();
+    },
+    [userId],
+  );
 
   const cancel = useCallback((clientId: string) => {
     const current = stateRef.current.items.find((item) => item.clientId === clientId);
@@ -158,9 +282,13 @@ function IdentityUploadQueueProvider({ children, auth }: { children: ReactNode; 
     dispatch({ type: 'cancelled', clientId });
     const sessionId = transport?.sessionId ?? sessions.current.get(clientId) ?? current.sessionId;
     const token = tokenRef.current;
-    if (sessionId && token) void Promise.resolve(cancelUpload(token, sessionId)).catch(() => undefined);
+    if (sessionId && token)
+      void Promise.resolve(cancelUpload(token, sessionId)).catch(() => undefined);
   }, []);
 
-  const value = useMemo(() => ({ state, addFiles, retry, cancel }), [addFiles, cancel, retry, state]);
+  const value = useMemo(
+    () => ({ state, addFiles, retry, cancel }),
+    [addFiles, cancel, retry, state],
+  );
   return <QueueContext.Provider value={value}>{children}</QueueContext.Provider>;
 }

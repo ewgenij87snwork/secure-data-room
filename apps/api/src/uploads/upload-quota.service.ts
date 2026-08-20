@@ -10,8 +10,20 @@ export const MAX_ACTIVE_FILES = 100;
 
 @Injectable()
 export class UploadQuotaService {
-  async assertBatchFits(tx: UploadTransaction, ownerId: string, additionalReservations: number, requestedBytes: number): Promise<void> {
-    const rows = await tx.$queryRaw<Readonly<{ activeSessions: bigint | number; reservedBytes: bigint | number; finalizedBytes: bigint | number; activeFiles: bigint | number }>[]>(Prisma.sql`
+  async assertBatchFits(
+    tx: UploadTransaction,
+    ownerId: string,
+    additionalReservations: number,
+    requestedBytes: number,
+  ): Promise<void> {
+    const rows = await tx.$queryRaw<
+      Readonly<{
+        activeSessions: bigint | number;
+        reservedBytes: bigint | number;
+        finalizedBytes: bigint | number;
+        activeFiles: bigint | number;
+      }>[]
+    >(Prisma.sql`
       SELECT
         (SELECT count(*) FROM "UploadSession" WHERE "ownerId" = ${ownerId}::uuid AND "status" IN ('PREPARED', 'UPLOADING') AND "expiresAt" > now()) AS "activeSessions",
         (SELECT coalesce(sum("expectedSizeBytes"), 0) FROM "UploadSession" WHERE "ownerId" = ${ownerId}::uuid AND "status" IN ('PREPARED', 'UPLOADING') AND "expiresAt" > now()) AS "reservedBytes",
@@ -21,8 +33,10 @@ export class UploadQuotaService {
     const row = rows[0];
     if (
       Number(row?.activeSessions ?? 0) + additionalReservations > MAX_ACTIVE_UPLOAD_SESSIONS ||
-      Number(row?.finalizedBytes ?? 0) + Number(row?.reservedBytes ?? 0) + requestedBytes > MAX_FINALIZED_BYTES ||
-      Number(row?.activeFiles ?? 0) + Number(row?.activeSessions ?? 0) + additionalReservations > MAX_ACTIVE_FILES
+      Number(row?.finalizedBytes ?? 0) + Number(row?.reservedBytes ?? 0) + requestedBytes >
+        MAX_FINALIZED_BYTES ||
+      Number(row?.activeFiles ?? 0) + Number(row?.activeSessions ?? 0) + additionalReservations >
+        MAX_ACTIVE_FILES
     ) {
       throw new ApiException('QUOTA_EXCEEDED', HttpStatus.CONFLICT, 'Upload quota exceeded.');
     }

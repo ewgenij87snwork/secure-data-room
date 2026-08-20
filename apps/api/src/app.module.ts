@@ -8,6 +8,14 @@ import { NodesModule } from './nodes/nodes.module.js';
 import { UploadsModule } from './uploads/uploads.module.js';
 
 @Module({
-  imports: [PrismaModule, HealthModule, AuthModule, MeModule, AccessControlModule, NodesModule, UploadsModule],
+  imports: [
+    PrismaModule,
+    HealthModule,
+    AuthModule,
+    MeModule,
+    AccessControlModule,
+    NodesModule,
+    UploadsModule,
+  ],
 })
 export class AppModule {}

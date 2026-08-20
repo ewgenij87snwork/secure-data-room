@@ -41,7 +41,11 @@ export function DataRoomRoute(): React.JSX.Element {
   const accountLabel = bootstrap.user.displayName ?? bootstrap.user.email;
   const currentNode = nodeQuery.data;
   const canManage = currentNode?.accessRole === 'OWNER' && !bootstrap.runtime.maintenanceMode;
-  const canUpload = shouldShowUploadDropzone({ canManage, uploadsEnabled: bootstrap.runtime.uploadsEnabled, nodeKind: currentNode?.kind });
+  const canUpload = shouldShowUploadDropzone({
+    canManage,
+    uploadsEnabled: bootstrap.runtime.uploadsEnabled,
+    nodeKind: currentNode?.kind,
+  });
   const children = childrenQuery.data?.pages.flatMap((page) => page.items) ?? [];
 
   const shell = (content: React.ReactNode, context?: React.ReactNode): React.JSX.Element => (
@@ -130,9 +134,12 @@ export function DataRoomRoute(): React.JSX.Element {
           </section>
         )}
         {canUpload ? (
-          <UploadDropzone disabled={!auth.accessToken || !addFiles} onFilesSelected={(files) => {
-            if (addFiles) void addFiles(currentNode.id, files);
-          }} />
+          <UploadDropzone
+            disabled={!auth.accessToken || !addFiles}
+            onFilesSelected={(files) => {
+              if (addFiles) void addFiles(currentNode.id, files);
+            }}
+          />
         ) : null}
       </div>
 

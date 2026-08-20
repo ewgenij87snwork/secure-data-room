@@ -1,5 +1,11 @@
 import { Body, Controller, Delete, Param, Post, UseGuards } from '@nestjs/common';
-import { finalizeUploadRequestSchema, prepareUploadRequestSchema, uuidSchema, type FinalizeUploadResponse, type PrepareUploadRequest } from '@data-room/contracts';
+import {
+  finalizeUploadRequestSchema,
+  prepareUploadRequestSchema,
+  uuidSchema,
+  type FinalizeUploadResponse,
+  type PrepareUploadRequest,
+} from '@data-room/contracts';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard.js';
 import { Principal } from '../auth/principal.decorator.js';
 import type { AuthenticatedPrincipal } from '../auth/principal.js';

@@ -16,26 +16,37 @@ class LazyStorageService extends StorageService {
     return this.delegate;
   }
 
-  createSignedUpload(storageKey: string) { return this.service.createSignedUpload(storageKey); }
-  getMetadata(storageKey: string) { return this.service.getMetadata(storageKey); }
-  readPrefix(storageKey: string, byteCount: number) { return this.service.readPrefix(storageKey, byteCount); }
-  createSignedReadUrl(storageKey: string, ttlSeconds: number) { return this.service.createSignedReadUrl(storageKey, ttlSeconds); }
-  remove(storageKeys: readonly string[]) { return this.service.remove(storageKeys); }
+  createSignedUpload(storageKey: string) {
+    return this.service.createSignedUpload(storageKey);
+  }
+  getMetadata(storageKey: string) {
+    return this.service.getMetadata(storageKey);
+  }
+  readPrefix(storageKey: string, byteCount: number) {
+    return this.service.readPrefix(storageKey, byteCount);
+  }
+  createSignedReadUrl(storageKey: string, ttlSeconds: number) {
+    return this.service.createSignedReadUrl(storageKey, ttlSeconds);
+  }
+  remove(storageKeys: readonly string[]) {
+    return this.service.remove(storageKeys);
+  }
 }
 
 @Module({
   providers: [
     {
       provide: StorageService,
-      useFactory: () => new LazyStorageService(() => {
-        const env = getEnv();
-        return new SupabaseStorageService(
-          createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
-            auth: { autoRefreshToken: false, persistSession: false },
-          }),
-          env,
-        );
-      }),
+      useFactory: () =>
+        new LazyStorageService(() => {
+          const env = getEnv();
+          return new SupabaseStorageService(
+            createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+              auth: { autoRefreshToken: false, persistSession: false },
+            }),
+            env,
+          );
+        }),
     },
   ],
   exports: [StorageService],

@@ -117,17 +117,43 @@ describe('DataRoomRoute', () => {
   });
 
   it.each([
-    ['owner with uploads enabled', { accessRole: 'OWNER' as const, kind: 'FOLDER' as const }, { uploadsEnabled: true, maintenanceMode: false }, true],
-    ['viewer with uploads enabled', { accessRole: 'VIEWER' as const, kind: 'FOLDER' as const }, { uploadsEnabled: true, maintenanceMode: false }, false],
-    ['owner during maintenance', { accessRole: 'OWNER' as const, kind: 'FOLDER' as const }, { uploadsEnabled: true, maintenanceMode: true }, false],
-    ['owner on a file route', { accessRole: 'OWNER' as const, kind: 'FILE' as const }, { uploadsEnabled: true, maintenanceMode: false }, false],
-  ])('%s shows upload controls only when the mounted route permits them', async (_name, nodeOverrides, runtime, visible) => {
-    const current = node({ id: rootId, ...nodeOverrides });
-    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => routeResponse(input, current, [])));
-    await renderRoute({ ...bootstrap, runtime: { ...bootstrap.runtime, ...runtime } });
-    if (visible) expect(await screen.findByLabelText('Choose PDF files')).toBeVisible();
-    else expect(screen.queryByLabelText('Choose PDF files')).not.toBeInTheDocument();
-  });
+    [
+      'owner with uploads enabled',
+      { accessRole: 'OWNER' as const, kind: 'FOLDER' as const },
+      { uploadsEnabled: true, maintenanceMode: false },
+      true,
+    ],
+    [
+      'viewer with uploads enabled',
+      { accessRole: 'VIEWER' as const, kind: 'FOLDER' as const },
+      { uploadsEnabled: true, maintenanceMode: false },
+      false,
+    ],
+    [
+      'owner during maintenance',
+      { accessRole: 'OWNER' as const, kind: 'FOLDER' as const },
+      { uploadsEnabled: true, maintenanceMode: true },
+      false,
+    ],
+    [
+      'owner on a file route',
+      { accessRole: 'OWNER' as const, kind: 'FILE' as const },
+      { uploadsEnabled: true, maintenanceMode: false },
+      false,
+    ],
+  ])(
+    '%s shows upload controls only when the mounted route permits them',
+    async (_name, nodeOverrides, runtime, visible) => {
+      const current = node({ id: rootId, ...nodeOverrides });
+      vi.stubGlobal(
+        'fetch',
+        vi.fn((input: RequestInfo | URL) => routeResponse(input, current, [])),
+      );
+      await renderRoute({ ...bootstrap, runtime: { ...bootstrap.runtime, ...runtime } });
+      if (visible) expect(await screen.findByLabelText('Choose PDF files')).toBeVisible();
+      else expect(screen.queryByLabelText('Choose PDF files')).not.toBeInTheDocument();
+    },
+  );
 });
 
 async function renderRoute(routeBootstrap = bootstrap): Promise<ReturnType<typeof render>> {

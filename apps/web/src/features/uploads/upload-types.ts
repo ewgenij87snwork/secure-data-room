@@ -3,13 +3,7 @@ import { MAX_PDF_BYTES, MAX_UPLOAD_BATCH } from '@data-room/contracts';
 export const UPLOAD_CHUNK_SIZE = 6 * 1024 * 1024;
 
 export type UploadState =
-  | 'queued'
-  | 'preparing'
-  | 'uploading'
-  | 'finalizing'
-  | 'succeeded'
-  | 'failed'
-  | 'cancelled';
+  'queued' | 'preparing' | 'uploading' | 'finalizing' | 'succeeded' | 'failed' | 'cancelled';
 
 export type UploadItem = Readonly<{
   clientId: string;
@@ -54,7 +48,8 @@ async function readSignature(file: Blob): Promise<string> {
   }
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(new TextDecoder().decode(reader.result as ArrayBuffer).slice(0, 5));
+    reader.onload = () =>
+      resolve(new TextDecoder().decode(reader.result as ArrayBuffer).slice(0, 5));
     reader.onerror = () => reject(reader.error ?? new Error('Could not read the selected file.'));
     reader.readAsArrayBuffer(file.slice(0, 5));
   });
@@ -65,9 +60,16 @@ export async function validatePdfSelection(
 ): Promise<Readonly<{ valid: readonly File[]; errors: readonly string[] }>> {
   const selected = files.slice(0, MAX_UPLOAD_BATCH);
   const errors = files.length > MAX_UPLOAD_BATCH ? ['Select up to 10 PDF files at a time.'] : [];
-  const results = await Promise.all(selected.map(async (file) => ({ file, error: await validatePdf(file) })));
+  const results = await Promise.all(
+    selected.map(async (file) => ({ file, error: await validatePdf(file) })),
+  );
   return {
     valid: results.filter((result) => !result.error).map((result) => result.file),
-    errors: [...errors, ...results.filter((result) => result.error).map((result) => `${result.file.name}: ${result.error}`)],
+    errors: [
+      ...errors,
+      ...results
+        .filter((result) => result.error)
+        .map((result) => `${result.file.name}: ${result.error}`),
+    ],
   };
 }
