@@ -1,10 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { SupabaseStorageService } from './supabase-storage.service.js';
 
-function objectContaining<T extends object>(value: T): T {
-  return expect.objectContaining(value) as T;
-}
-
 describe('SupabaseStorageService', () => {
   it('creates a non-upsert signed upload capability and derives the TUS endpoint', async () => {
     const createSignedUploadUrl = vi.fn().mockResolvedValue({
@@ -59,7 +55,7 @@ describe('SupabaseStorageService', () => {
   it('requests and retains only the bounded prefix', async () => {
     const serviceRoleKey = 'fake-service-role-key-for-tests';
     const fetchImpl = vi
-      .fn()
+      .fn<(input: string, init?: RequestInit) => Promise<Response>>()
       .mockResolvedValue(new Response(Uint8Array.from([37, 80, 68, 70, 45, 99]), { status: 206 }));
     const service = new SupabaseStorageService(
       { storage: { from: () => ({}) } } as never,
@@ -74,15 +70,17 @@ describe('SupabaseStorageService', () => {
       Uint8Array.from([37, 80, 68, 70, 45]),
     );
 
-    expect(fetchImpl).toHaveBeenCalledWith(
+    const fetchCall = fetchImpl.mock.calls[0];
+    if (!fetchCall) throw new Error('Expected a storage fetch call.');
+    const [url, requestInit] = fetchCall;
+    expect(url).toBe(
       'https://project.supabase.co/storage/v1/object/data-room-pdfs/rooms/r/objects/o',
-      objectContaining({
-        headers: objectContaining({
-          Range: 'bytes=0-4',
-          Authorization: `Bearer ${serviceRoleKey}`,
-          apikey: serviceRoleKey,
-        }),
-      }),
     );
+    if (!requestInit) throw new Error('Expected storage fetch request options.');
+    expect(requestInit.headers).toEqual({
+      Range: 'bytes=0-4',
+      Authorization: `Bearer ${serviceRoleKey}`,
+      apikey: serviceRoleKey,
+    });
   });
 });

@@ -36,18 +36,13 @@ interface UpdateArgs {
   where: UpdateWhere;
   data: Record<string, unknown>;
 }
-
-function objectContaining<T extends object>(value: T): T {
-  return expect.objectContaining(value) as T;
-}
-
-function stringMatching(pattern: RegExp): string {
-  return expect.stringMatching(pattern) as string;
+interface CreateArgs {
+  data: Record<string, unknown>;
 }
 
 function database() {
   const session = {
-    create: vi.fn().mockResolvedValue({
+    create: vi.fn<(args: CreateArgs) => Promise<unknown>>().mockResolvedValue({
       id: '66666666-6666-4666-8666-666666666666',
       ownerId: owner.userId,
       parentNodeId: parent.nodeId,
@@ -200,15 +195,11 @@ describe('UploadsService', () => {
     const { service: subject } = service({ db });
     await subject.prepare(owner, input);
 
-    expect(db.uploadSession.updateMany).toHaveBeenCalledWith(
-      objectContaining({
-        where: objectContaining({ id: '66666666-6666-4666-8666-666666666666' }),
-        data: objectContaining({
-          status: 'PREPARED',
-          storageKey: stringMatching(/\/objects\/[0-9a-f-]{36}$/u),
-        }),
-      }),
-    );
+    const updateArgs = db.uploadSession.updateMany.mock.calls[0]?.[0];
+    if (!updateArgs) throw new Error('Expected an upload-session update.');
+    expect(updateArgs.where.id).toBe('66666666-6666-4666-8666-666666666666');
+    expect(updateArgs.data.status).toBe('PREPARED');
+    expect(updateArgs.data.storageKey).toEqual(expect.stringMatching(/\/objects\/[0-9a-f-]{36}$/u));
   });
 
   it('returns successful signed siblings and rejects only failed sessions', async () => {
@@ -265,12 +256,13 @@ describe('UploadsService', () => {
     await expect(subject.prepare(owner, batch)).resolves.toMatchObject({
       uploads: [{ clientId: input.files[0]!.clientId }],
     });
-    expect(db.uploadSession.updateMany).toHaveBeenCalledWith(
-      objectContaining({
-        where: objectContaining({ id: '66666666-6666-4666-8666-666666666667' }),
-        data: { status: 'REJECTED' },
-      }),
-    );
+    const rejectedUpdate = db.uploadSession.updateMany.mock.calls.at(-1)?.[0];
+    if (!rejectedUpdate) throw new Error('Expected a rejected upload-session update.');
+    expect(rejectedUpdate.where.id).toBe('66666666-6666-4666-8666-666666666667');
+    expect(rejectedUpdate.where.ownerId).toBe(owner.userId);
+    expect(rejectedUpdate.where.clientId).toBe(second.clientId);
+    expect(rejectedUpdate.where.status).toBe('PREPARED');
+    expect(rejectedUpdate.data).toEqual({ status: 'REJECTED' });
     expect(storage.remove).toHaveBeenCalledWith(['rooms/r/objects/two']);
   });
 
@@ -360,9 +352,9 @@ describe('UploadsService', () => {
       response: { error: { code: 'INTERNAL_ERROR' } },
     });
     expect(storage.remove).toHaveBeenCalledWith([oldKey]);
-    expect(db.uploadSession.updateMany).toHaveBeenCalledWith(
-      objectContaining({ where: objectContaining({ storageKey: oldKey }) }),
-    );
+    const oldGenerationUpdate = db.uploadSession.updateMany.mock.calls.at(-1)?.[0];
+    if (!oldGenerationUpdate) throw new Error('Expected an old-generation update.');
+    expect(oldGenerationUpdate.where.storageKey).toBe(oldKey);
   });
 
   it('rejects prepare while uploads are disabled', async () => {
@@ -425,17 +417,15 @@ describe('UploadsService', () => {
     });
     await expect(subject.prepare(owner, input)).rejects.toBeInstanceOf(ApiException);
 
-    expect(db.uploadSession.create).toHaveBeenCalledWith(
-      objectContaining({
-        data: objectContaining({
-          storageKey: stringMatching(
-            /^rooms\/33333333-3333-4333-8333-333333333333\/objects\/[0-9a-f-]{36}$/u,
-          ),
-        }),
-      }),
+    const createArgs = db.uploadSession.create.mock.calls[0]?.[0];
+    if (!createArgs) throw new Error('Expected an upload-session create.');
+    expect(createArgs.data.storageKey).toEqual(
+      expect.stringMatching(
+        /^rooms\/33333333-3333-4333-8333-333333333333\/objects\/[0-9a-f-]{36}$/u,
+      ),
     );
     expect(db.uploadSession.updateMany).toHaveBeenCalledWith(
-      objectContaining({ data: { status: 'REJECTED' } }),
+      expect.objectContaining({ data: { status: 'REJECTED' } }),
     );
     expect(storage.createSignedUpload).toHaveBeenCalledOnce();
   });
@@ -504,7 +494,7 @@ describe('UploadsService', () => {
     });
     await subject.cancel(owner, '66666666-6666-4666-8666-666666666666');
     expect(db.uploadSession.updateMany).toHaveBeenCalledWith(
-      objectContaining({ data: { status: 'CANCELLED' } }),
+      expect.objectContaining({ data: { status: 'CANCELLED' } }),
     );
   });
 
