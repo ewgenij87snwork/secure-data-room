@@ -426,7 +426,10 @@ a {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .upload-progress__track span {
+  .spin,
+  .upload-progress__track span,
+  .shared-item-card {
+    animation: none;
     transition: none;
   }
 }
