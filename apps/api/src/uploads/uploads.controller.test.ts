@@ -30,14 +30,12 @@ describe('UploadsController', () => {
   it('validates UUID and body at the route boundary and wires all lifecycle calls', async () => {
     const uploads = {
       prepare: vi.fn().mockResolvedValue({ uploads: [] }),
-      finalize: vi
-        .fn()
-        .mockResolvedValue({
-          clientId: body.files[0]!.clientId,
-          nodeId: sessionId,
-          finalName: 'deal.pdf',
-          conflictResolved: false,
-        }),
+      finalize: vi.fn().mockResolvedValue({
+        clientId: body.files[0]!.clientId,
+        nodeId: sessionId,
+        finalName: 'deal.pdf',
+        conflictResolved: false,
+      }),
       cancel: vi.fn().mockResolvedValue(undefined),
     };
     const controller = new UploadsController(uploads as never);
