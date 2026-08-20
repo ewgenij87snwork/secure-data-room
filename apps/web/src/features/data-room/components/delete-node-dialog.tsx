@@ -19,9 +19,18 @@ export function DeleteNodeDialog({
   const impact = useDeleteImpact(node.id, open);
   const mutation = useDeleteNode();
 
+  const close = (): void => {
+    mutation.reset();
+    onOpenChange(false);
+  };
+
   const changeOpen = (next: boolean): void => {
-    if (!next) mutation.reset();
-    onOpenChange(next);
+    if (!next) {
+      if (mutation.isPending) return;
+      close();
+      return;
+    }
+    onOpenChange(true);
   };
 
   const isGone =
@@ -46,15 +55,34 @@ export function DeleteNodeDialog({
           </p>
         ) : null}
         {impact.data ? (
-          <p>
-            This permanently removes {impact.data.folderCount}{' '}
-            {pluralize('folder', impact.data.folderCount)}, {impact.data.fileCount}{' '}
-            {pluralize('file', impact.data.fileCount)} ({formatBytes(impact.data.totalBytes)})
-            {impact.data.activeShareCount > 0
-              ? ` and revokes ${impact.data.activeShareCount} active ${pluralize('share', impact.data.activeShareCount)}`
-              : ''}
-            .
-          </p>
+          <div className="delete-impact__summary">
+            <p>This permanently removes:</p>
+            <dl>
+              <div>
+                <dt>Folders</dt>
+                <dd>
+                  {impact.data.folderCount} {pluralize('folder', impact.data.folderCount)}
+                </dd>
+              </div>
+              <div>
+                <dt>Files</dt>
+                <dd>
+                  {impact.data.fileCount} {pluralize('file', impact.data.fileCount)}
+                </dd>
+              </div>
+              <div>
+                <dt>Storage</dt>
+                <dd>{formatBytes(impact.data.totalBytes)}</dd>
+              </div>
+              <div>
+                <dt>Active shares revoked</dt>
+                <dd>
+                  {impact.data.activeShareCount} active{' '}
+                  {pluralize('share', impact.data.activeShareCount)}
+                </dd>
+              </div>
+            </dl>
+          </div>
         ) : null}
         {mutation.isError ? (
           <p className="management-form__error" role="alert">
@@ -63,7 +91,12 @@ export function DeleteNodeDialog({
         ) : null}
       </div>
       <div className="management-form__actions">
-        <button className="secondary-button" type="button" onClick={() => changeOpen(false)}>
+        <button
+          className="secondary-button"
+          type="button"
+          disabled={mutation.isPending}
+          onClick={() => changeOpen(false)}
+        >
           Cancel
         </button>
         <button
@@ -72,7 +105,7 @@ export function DeleteNodeDialog({
           disabled={!impact.data || mutation.isPending}
           onClick={() =>
             mutation.mutate(node, {
-              onSuccess: () => changeOpen(false),
+              onSuccess: close,
             })
           }
         >

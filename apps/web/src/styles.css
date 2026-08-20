@@ -460,6 +460,7 @@ a {
 .move-tree__target {
   padding-left: 38px;
 }
+.move-tree__folder:disabled,
 .move-tree__target:disabled {
   color: hsl(var(--muted-foreground));
   cursor: not-allowed;
@@ -1257,6 +1258,13 @@ a {
   margin: 0;
 }
 
+.management-form__status {
+  margin: 12px 0 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
 .management-form__actions {
   display: flex;
   justify-content: flex-end;
@@ -1268,6 +1276,37 @@ a {
   margin: 0;
   color: hsl(var(--muted-foreground));
   line-height: 1.65;
+}
+
+.delete-impact__summary > p {
+  margin: 0 0 12px;
+  color: hsl(var(--foreground));
+  font-weight: 650;
+}
+
+.delete-impact__summary dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.delete-impact__summary dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid hsl(var(--border) / 0.7);
+}
+
+.delete-impact__summary dt {
+  color: hsl(var(--muted-foreground));
+}
+
+.delete-impact__summary dd {
+  margin: 0;
+  color: hsl(var(--foreground));
+  font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .spin {

@@ -1,5 +1,5 @@
 import type { NodeSummary } from '@data-room/contracts';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ResponsiveDialog } from '../../../components/ui/responsive-dialog.js';
 import { mutationErrorMessage, parseNodeName, suggestedNodeName } from '../dialog-helpers.js';
 import { useRenameNode } from '../data-room-queries.js';
@@ -16,6 +16,7 @@ export function RenameNodeDialog({
   returnFocusElement?: HTMLElement | null;
 }>): React.JSX.Element {
   const [name, setName] = useState(node.name);
+  const inputRef = useRef<HTMLInputElement>(null);
   const mutation = useRenameNode();
   const parsedName = parseNodeName(name);
   const suggestion = suggestedNodeName(mutation.error);
@@ -43,6 +44,7 @@ export function RenameNodeDialog({
       >
         <label htmlFor={`rename-node-${node.id}`}>Name</label>
         <input
+          ref={inputRef}
           id={`rename-node-${node.id}`}
           name="name"
           value={name}
@@ -58,7 +60,14 @@ export function RenameNodeDialog({
           <div className="management-form__error" role="alert">
             <p>{mutationErrorMessage(mutation.error)}</p>
             {suggestion ? (
-              <button className="text-button" type="button" onClick={() => setName(suggestion)}>
+              <button
+                className="text-button"
+                type="button"
+                onClick={() => {
+                  setName(suggestion);
+                  inputRef.current?.focus();
+                }}
+              >
                 Use “{suggestion}”
               </button>
             ) : null}

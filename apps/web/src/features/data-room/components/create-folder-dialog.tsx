@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { ResponsiveDialog } from '../../../components/ui/responsive-dialog.js';
 import { mutationErrorMessage, parseNodeName, suggestedNodeName } from '../dialog-helpers.js';
 import { useCreateFolder } from '../data-room-queries.js';
@@ -15,6 +15,7 @@ export function CreateFolderDialog({
   returnFocusElement?: HTMLElement | null;
 }>): React.JSX.Element {
   const [name, setName] = useState('');
+  const inputRef = useRef<HTMLInputElement>(null);
   const mutation = useCreateFolder();
   const parsedName = parseNodeName(name);
   const suggestion = suggestedNodeName(mutation.error);
@@ -45,6 +46,7 @@ export function CreateFolderDialog({
       >
         <label htmlFor="create-folder-name">Folder name</label>
         <input
+          ref={inputRef}
           id="create-folder-name"
           name="name"
           value={name}
@@ -60,7 +62,14 @@ export function CreateFolderDialog({
           <div className="management-form__error" role="alert">
             <p>{mutationErrorMessage(mutation.error)}</p>
             {suggestion ? (
-              <button className="text-button" type="button" onClick={() => setName(suggestion)}>
+              <button
+                className="text-button"
+                type="button"
+                onClick={() => {
+                  setName(suggestion);
+                  inputRef.current?.focus();
+                }}
+              >
                 Use “{suggestion}”
               </button>
             ) : null}

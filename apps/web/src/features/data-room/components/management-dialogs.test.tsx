@@ -1,6 +1,6 @@
 import type { NodeSummary } from '@data-room/contracts';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AuthContext, type AuthContextValue } from '../../auth/auth-context.js';
@@ -60,13 +60,13 @@ describe('management dialogs', () => {
     expect(input).toHaveValue('Legal (1)');
   });
 
-  it('waits for and renders exact delete impact before enabling deletion', async () => {
+  it('waits for and renders every exact delete impact count before enabling deletion', async () => {
     const impact = {
       rootNodeId: nodeId,
       folderCount: 2,
       fileCount: 3,
       totalBytes: '1048576',
-      activeShareCount: 1,
+      activeShareCount: 0,
     };
     const fetchMock = vi
       .fn()
@@ -79,9 +79,11 @@ describe('management dialogs', () => {
 
     const deleteButton = screen.getByRole('button', { name: 'Delete permanently' });
     expect(deleteButton).toBeDisabled();
-    expect(
-      await screen.findByText(/2 folders, 3 files \(1.0 MB\) and revokes 1 active share/),
-    ).toBeVisible();
+    expect(await screen.findByText('Folders')).toBeVisible();
+    expect(screen.getByText('2 folders')).toBeVisible();
+    expect(screen.getByText('3 files')).toBeVisible();
+    expect(screen.getByText('1.0 MB')).toBeVisible();
+    expect(screen.getByText('0 active shares')).toBeVisible();
     expect(deleteButton).toBeEnabled();
 
     await userEvent.click(deleteButton);
@@ -105,6 +107,63 @@ describe('management dialogs', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(requestBody(fetchMock, 0)).toEqual({ name: 'Tax', expectedRevision: 1 });
   });
+
+  it('keeps an irreversible delete dialog locked until the request settles', async () => {
+    const impact = {
+      rootNodeId: nodeId,
+      folderCount: 1,
+      fileCount: 0,
+      totalBytes: '0',
+      activeShareCount: 0,
+    };
+    const deletion = deferred<Response>();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(impact))
+      .mockReturnValueOnce(deletion.promise);
+    vi.stubGlobal('fetch', fetchMock);
+    const { DeleteNodeDialog } = await import('./delete-node-dialog.js');
+    const onOpenChange = vi.fn();
+    renderWithClient(<DeleteNodeDialog open onOpenChange={onOpenChange} node={folderNode()} />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete permanently' }));
+    const cancelWasLocked = screen.getByRole('button', { name: 'Cancel' }).hasAttribute('disabled');
+    deletion.resolve(jsonResponse(impact));
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+
+    expect(cancelWasLocked).toBe(true);
+  });
+
+  it('keeps a conflicting rename input and focuses it after applying the server suggestion', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      jsonResponse(
+        {
+          error: {
+            code: 'NAME_CONFLICT',
+            message: 'Internal duplicate detail.',
+            requestId: '00000000-0000-4000-8000-000000000001',
+            details: { suggestedName: 'Tax (1)' },
+          },
+        },
+        409,
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const { RenameNodeDialog } = await import('./rename-node-dialog.js');
+    renderWithClient(<RenameNodeDialog open onOpenChange={vi.fn()} node={folderNode()} />);
+
+    const input = screen.getByRole('textbox', { name: 'Name' });
+    await userEvent.clear(input);
+    await userEvent.type(input, 'Tax');
+    await userEvent.click(screen.getByRole('button', { name: 'Save name' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('already exists');
+    expect(input).toHaveValue('Tax');
+    await userEvent.click(screen.getByRole('button', { name: 'Use “Tax (1)”' }));
+    expect(input).toHaveValue('Tax (1)');
+    expect(input).toHaveFocus();
+    expect(screen.queryByText('Internal duplicate detail.')).not.toBeInTheDocument();
+  });
 });
 
 function renderWithClient(ui: React.ReactNode): ReturnType<typeof render> {
@@ -126,6 +185,14 @@ function requestBody(fetchMock: ReturnType<typeof vi.fn>, index: number): unknow
   const body = (fetchMock.mock.calls[index]?.[1] as RequestInit | undefined)?.body;
   if (typeof body !== 'string') throw new Error('Expected a JSON string request body.');
   return JSON.parse(body) as unknown;
+}
+
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((complete) => {
+    resolve = complete;
+  });
+  return { promise, resolve };
 }
 
 function folderNode(): NodeSummary {

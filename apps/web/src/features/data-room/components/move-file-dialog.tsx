@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ResponsiveDialog } from '../../../components/ui/responsive-dialog.js';
 import { ApiClientError } from '../../../lib/api-error.js';
-import { useMoveNode, useNodeChildren } from '../data-room-queries.js';
+import { mutationErrorMessage, suggestedNodeName } from '../dialog-helpers.js';
+import { useMoveNode, useNodeChildren, useRenameNode } from '../data-room-queries.js';
 
 export function MoveFileDialog({
   open,
@@ -20,15 +21,74 @@ export function MoveFileDialog({
   returnFocusElement?: HTMLElement | null;
 }>): React.JSX.Element {
   const [selected, setSelected] = useState<string | null>(null);
+  const [effectiveNode, setEffectiveNode] = useState(node);
+  const [recoveryPhase, setRecoveryPhase] = useState<'idle' | 'renaming' | 'moving' | 'partial'>(
+    'idle',
+  );
   const mutation = useMoveNode();
+  const renameMutation = useRenameNode();
   const queryClient = useQueryClient();
+  const recoveryError = renameMutation.error ?? mutation.error;
+  const suggestion = suggestedNodeName(recoveryError);
+  const isWorking =
+    mutation.isPending ||
+    renameMutation.isPending ||
+    recoveryPhase === 'renaming' ||
+    recoveryPhase === 'moving';
+
+  const close = (): void => {
+    mutation.reset();
+    renameMutation.reset();
+    setSelected(null);
+    setEffectiveNode(node);
+    setRecoveryPhase('idle');
+    onOpenChange(false);
+  };
+
   const changeOpen = (next: boolean) => {
     if (!next) {
-      mutation.reset();
-      setSelected(null);
+      if (isWorking) return;
+      close();
+      return;
     }
-    onOpenChange(next);
+    onOpenChange(true);
   };
+
+  const moveCurrentNode = async (nodeToMove: NodeSummary): Promise<void> => {
+    if (!selected || isWorking) return;
+    mutation.reset();
+    setRecoveryPhase('moving');
+    try {
+      await mutation.mutateAsync({ node: nodeToMove, targetFolderId: selected });
+      close();
+    } catch {
+      setRecoveryPhase(nodeToMove.revision === node.revision ? 'idle' : 'partial');
+    }
+  };
+
+  const renameAndMove = async (nextName: string): Promise<void> => {
+    if (!selected || isWorking) return;
+    mutation.reset();
+    renameMutation.reset();
+    setRecoveryPhase('renaming');
+    let renamed: NodeSummary;
+    try {
+      renamed = await renameMutation.mutateAsync({ node: effectiveNode, name: nextName });
+    } catch {
+      setRecoveryPhase('idle');
+      return;
+    }
+
+    setEffectiveNode(renamed);
+    setRecoveryPhase('moving');
+    try {
+      await mutation.mutateAsync({ node: renamed, targetFolderId: selected });
+      close();
+    } catch {
+      setRecoveryPhase('partial');
+    }
+  };
+
   return (
     <ResponsiveDialog
       open={open}
@@ -37,18 +97,48 @@ export function MoveFileDialog({
       description="Choose a destination folder. Existing files are never overwritten."
       returnFocusElement={returnFocusElement}
     >
-      <div className="move-tree" role="tree" aria-label="Destination folders">
+      <div className="move-tree" role="tree" aria-label="Destination folders" aria-busy={isWorking}>
         <FolderBranch
           folderId={currentFolderId}
           currentFolderId={currentFolderId}
           selected={selected}
           onSelect={setSelected}
+          disabled={isWorking}
           initial
         />
       </div>
-      {mutation.isError ? (
+      {recoveryPhase === 'renaming' || recoveryPhase === 'moving' ? (
+        <p className="management-form__status" role="status" aria-live="polite">
+          {recoveryPhase === 'renaming'
+            ? 'Renaming the file before moving it…'
+            : 'Moving the renamed file…'}
+        </p>
+      ) : null}
+      {recoveryPhase === 'partial' ? (
         <div className="management-form__error" role="alert">
-          {mutation.error instanceof ApiClientError && mutation.error.code === 'CONFLICT' ? (
+          <p>The file was renamed to “{effectiveNode.name}”, but the move did not finish.</p>
+          <p>{mutationErrorMessage(mutation.error)}</p>
+          {suggestion ? (
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => void renameAndMove(suggestion)}
+            >
+              Rename to “{suggestion}” and retry
+            </button>
+          ) : (
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => void moveCurrentNode(effectiveNode)}
+            >
+              Retry move
+            </button>
+          )}
+        </div>
+      ) : recoveryError ? (
+        <div className="management-form__error" role="alert">
+          {recoveryError instanceof ApiClientError && recoveryError.code === 'CONFLICT' ? (
             <>
               <p>This item changed elsewhere. Refresh the folder and choose again.</p>
               <button
@@ -56,6 +146,7 @@ export function MoveFileDialog({
                 type="button"
                 onClick={() => {
                   mutation.reset();
+                  renameMutation.reset();
                   void queryClient.invalidateQueries({
                     queryKey: ['nodes', 'children', currentFolderId],
                   });
@@ -64,37 +155,43 @@ export function MoveFileDialog({
                 Refresh folder
               </button>
             </>
-          ) : mutation.error instanceof ApiClientError &&
-            mutation.error.code === 'NAME_CONFLICT' ? (
+          ) : recoveryError instanceof ApiClientError && recoveryError.code === 'NAME_CONFLICT' ? (
             <>
               <p>A file with this name already exists there. No file was overwritten.</p>
-              {typeof mutation.error.details?.suggestedName === 'string' ? (
-                <p>Suggested available name: “{mutation.error.details.suggestedName}”</p>
+              {suggestion ? (
+                <button
+                  className="text-button"
+                  type="button"
+                  disabled={renameMutation.isPending || mutation.isPending}
+                  onClick={() => void renameAndMove(suggestion)}
+                >
+                  {renameMutation.isPending || mutation.isPending
+                    ? 'Renaming and moving…'
+                    : `Rename to “${suggestion}” and move`}
+                </button>
               ) : null}
             </>
           ) : (
-            'The file could not be moved. Please try again.'
+            mutationErrorMessage(recoveryError)
           )}
         </div>
       ) : null}
       <div className="management-form__actions">
-        <button className="secondary-button" type="button" onClick={() => changeOpen(false)}>
+        <button
+          className="secondary-button"
+          type="button"
+          disabled={isWorking}
+          onClick={() => changeOpen(false)}
+        >
           Cancel
         </button>
         <button
           className="primary-button"
           type="button"
-          disabled={!selected || selected === currentFolderId || mutation.isPending}
-          onClick={() => {
-            if (selected) {
-              mutation.mutate(
-                { node, targetFolderId: selected },
-                { onSuccess: () => changeOpen(false) },
-              );
-            }
-          }}
+          disabled={!selected || selected === currentFolderId || isWorking}
+          onClick={() => void moveCurrentNode(effectiveNode)}
         >
-          {mutation.isPending ? 'Moving…' : 'Move file'}
+          {isWorking ? 'Moving…' : 'Move file'}
         </button>
       </div>
     </ResponsiveDialog>
@@ -106,12 +203,14 @@ function FolderBranch({
   currentFolderId,
   selected,
   onSelect,
+  disabled,
   initial = false,
 }: Readonly<{
   folderId: string;
   currentFolderId: string;
   selected: string | null;
   onSelect: (id: string) => void;
+  disabled: boolean;
   initial?: boolean;
 }>): React.JSX.Element {
   const [expanded, setExpanded] = useState(initial);
@@ -124,6 +223,7 @@ function FolderBranch({
         type="button"
         className="move-tree__folder"
         aria-label={expanded ? `Collapse ${folderId}` : 'Load folders'}
+        disabled={disabled}
         onClick={() => setExpanded((value) => !value)}
       >
         <ChevronRight
@@ -147,7 +247,7 @@ function FolderBranch({
               <button
                 type="button"
                 className="move-tree__target"
-                disabled={folder.id === currentFolderId}
+                disabled={disabled || folder.id === currentFolderId}
                 onClick={() => onSelect(folder.id)}
               >
                 {folder.name}
@@ -157,6 +257,7 @@ function FolderBranch({
                 currentFolderId={currentFolderId}
                 selected={selected}
                 onSelect={onSelect}
+                disabled={disabled}
               />
             </div>
           ))}
