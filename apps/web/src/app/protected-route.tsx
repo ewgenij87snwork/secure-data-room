@@ -83,7 +83,7 @@ export function ProtectedRoute(): React.JSX.Element {
           Maintenance mode is active. Read-only access remains available.
         </div>
       ) : null}
-      <Outlet />
+      <Outlet context={{ bootstrap: bootstrap.data }} />
     </>
   );
 }

@@ -1,0 +1,79 @@
+import {
+  createFolderRequestSchema,
+  deleteImpactSchema,
+  listNodeChildrenResponseSchema,
+  nodeBreadcrumbsResponseSchema,
+  nodeSummarySchema,
+  renameNodeRequestSchema,
+  type CreateFolderRequest,
+  type DeleteImpact,
+  type ListNodeChildrenResponse,
+  type NodeBreadcrumbsResponse,
+  type NodeSummary,
+  type RenameNodeRequest,
+} from '@data-room/contracts';
+import { apiRequest } from '../../lib/api-client.js';
+
+export async function readNode(accessToken: string, nodeId: string): Promise<NodeSummary> {
+  const response = await apiRequest<unknown>(`/nodes/${nodeId}`, { accessToken });
+  return nodeSummarySchema.parse(response);
+}
+
+export async function readBreadcrumbs(
+  accessToken: string,
+  nodeId: string,
+): Promise<NodeBreadcrumbsResponse> {
+  const response = await apiRequest<unknown>(`/nodes/${nodeId}/breadcrumbs`, { accessToken });
+  return nodeBreadcrumbsResponseSchema.parse(response);
+}
+
+export async function readNodeChildren(
+  accessToken: string,
+  nodeId: string,
+  cursor?: string,
+): Promise<ListNodeChildrenResponse> {
+  const query = new URLSearchParams({ limit: '50' });
+  if (cursor) query.set('cursor', cursor);
+  const response = await apiRequest<unknown>(`/nodes/${nodeId}/children?${query.toString()}`, {
+    accessToken,
+  });
+  return listNodeChildrenResponseSchema.parse(response);
+}
+
+export async function createFolder(
+  accessToken: string,
+  input: CreateFolderRequest,
+): Promise<NodeSummary> {
+  const response = await apiRequest<unknown>('/folders', {
+    method: 'POST',
+    accessToken,
+    body: JSON.stringify(createFolderRequestSchema.parse(input)),
+  });
+  return nodeSummarySchema.parse(response);
+}
+
+export async function renameNode(
+  accessToken: string,
+  nodeId: string,
+  input: RenameNodeRequest,
+): Promise<NodeSummary> {
+  const response = await apiRequest<unknown>(`/nodes/${nodeId}/name`, {
+    method: 'PATCH',
+    accessToken,
+    body: JSON.stringify(renameNodeRequestSchema.parse(input)),
+  });
+  return nodeSummarySchema.parse(response);
+}
+
+export async function readDeleteImpact(accessToken: string, nodeId: string): Promise<DeleteImpact> {
+  const response = await apiRequest<unknown>(`/nodes/${nodeId}/delete-impact`, { accessToken });
+  return deleteImpactSchema.parse(response);
+}
+
+export async function deleteNode(accessToken: string, nodeId: string): Promise<DeleteImpact> {
+  const response = await apiRequest<unknown>(`/nodes/${nodeId}`, {
+    method: 'DELETE',
+    accessToken,
+  });
+  return deleteImpactSchema.parse(response);
+}
