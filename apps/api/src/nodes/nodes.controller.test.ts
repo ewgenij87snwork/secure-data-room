@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import {
   listNodeChildrenResponseSchema,
   nodeSummarySchema,
+  nodeBreadcrumbsResponseSchema,
   type ListNodeChildrenResponse,
   type NodeSummary,
 } from '@data-room/contracts';
@@ -15,6 +16,7 @@ import { authenticatedPrincipal } from '../auth/principal.js';
 import { PrismaService } from '../database/prisma.service.js';
 import { NodesModule } from './nodes.module.js';
 import { NodesListService } from './nodes-list.service.js';
+import { NodesReadService } from './nodes-read.service.js';
 import { NodesService } from './nodes.service.js';
 
 const principal = authenticatedPrincipal(
@@ -39,17 +41,19 @@ const childrenResponse: ListNodeChildrenResponse = {
   items: [responseBody],
   pageInfo: { nextCursor: null, hasNextPage: false },
 };
+const breadcrumbsResponse = { items: [{ id: responseBody.id, name: responseBody.name }] };
 
 describe('NodesController', () => {
   let app: INestApplication | undefined;
 
   afterEach(async () => app?.close());
 
-  async function createApp(
-    createFolder = vi.fn().mockResolvedValue(responseBody),
-    listChildren = vi.fn().mockResolvedValue(childrenResponse),
-  ) {
-    const moduleRef = await Test.createTestingModule({ imports: [NodesModule] })
+  async function createApp(options: { useRealAuth?: boolean } = {}) {
+    const createFolder = vi.fn().mockResolvedValue(responseBody);
+    const listChildren = vi.fn().mockResolvedValue(childrenResponse);
+    const getNode = vi.fn().mockResolvedValue(responseBody);
+    const getBreadcrumbs = vi.fn().mockResolvedValue(breadcrumbsResponse);
+    const moduleBuilder = Test.createTestingModule({ imports: [NodesModule] })
       .overrideProvider(AUTH_CONFIG)
       .useValue({
         issuer: 'http://localhost/auth/v1',
@@ -62,18 +66,21 @@ describe('NodesController', () => {
       .useValue({ createFolder })
       .overrideProvider(NodesListService)
       .useValue({ listChildren })
-      .overrideGuard(JwtAuthGuard)
-      .useValue({
+      .overrideProvider(NodesReadService)
+      .useValue({ getNode, getBreadcrumbs });
+    if (!options.useRealAuth) {
+      moduleBuilder.overrideGuard(JwtAuthGuard).useValue({
         canActivate(context: ExecutionContext): boolean {
           context.switchToHttp().getRequest<{ user?: typeof principal }>().user = principal;
           return true;
         },
-      })
-      .compile();
+      });
+    }
+    const moduleRef = await moduleBuilder.compile();
     app = moduleRef.createNestApplication();
     app.setGlobalPrefix('v1');
     await app.init();
-    return { createFolder, listChildren };
+    return { createFolder, listChildren, getNode, getBreadcrumbs };
   }
 
   it('creates a folder through the guarded normalized route', async () => {
@@ -130,6 +137,37 @@ describe('NodesController', () => {
       cursor: 'opaque-cursor',
       limit: 2,
     });
+  });
+
+  it('reads node detail and breadcrumbs through the guarded routes', async () => {
+    const { getNode, getBreadcrumbs } = await createApp();
+    const detail = await apiRequest().get(`/v1/nodes/${responseBody.id}`).expect(200);
+    expect(nodeSummarySchema.parse(detail.body as unknown)).toEqual(responseBody);
+    expect(getNode).toHaveBeenCalledWith(principal, responseBody.id);
+
+    const breadcrumbs = await apiRequest()
+      .get(`/v1/nodes/${responseBody.id}/breadcrumbs`)
+      .expect(200);
+    expect(nodeBreadcrumbsResponseSchema.parse(breadcrumbs.body as unknown)).toEqual(
+      breadcrumbsResponse,
+    );
+    expect(getBreadcrumbs).toHaveBeenCalledWith(principal, responseBody.id);
+  });
+
+  it('rejects malformed read UUIDs before service invocation', async () => {
+    const { getNode, getBreadcrumbs } = await createApp();
+    await apiRequest().get('/v1/nodes/not-a-uuid').expect(400);
+    await apiRequest().get('/v1/nodes/not-a-uuid/breadcrumbs').expect(400);
+    expect(getNode).not.toHaveBeenCalled();
+    expect(getBreadcrumbs).not.toHaveBeenCalled();
+  });
+
+  it('rejects unauthenticated reads through the real guard before service invocation', async () => {
+    const { getNode, getBreadcrumbs } = await createApp({ useRealAuth: true });
+    await apiRequest().get(`/v1/nodes/${responseBody.id}`).expect(401);
+    await apiRequest().get(`/v1/nodes/${responseBody.id}/breadcrumbs`).expect(401);
+    expect(getNode).not.toHaveBeenCalled();
+    expect(getBreadcrumbs).not.toHaveBeenCalled();
   });
 
   it.each(['0', '101', '-1', '1.5', 'not-a-number'])(

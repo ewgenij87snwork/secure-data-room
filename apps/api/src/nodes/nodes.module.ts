@@ -6,11 +6,12 @@ import { RuntimeControlsModule } from '../runtime-controls/runtime-controls.modu
 import { NodesController } from './nodes.controller.js';
 import { NodesService } from './nodes.service.js';
 import { NodesListService } from './nodes-list.service.js';
+import { NodesReadService } from './nodes-read.service.js';
 
 @Module({
   imports: [PrismaModule, AuthModule, AccessControlModule, RuntimeControlsModule],
   controllers: [NodesController],
-  providers: [NodesService, NodesListService],
+  providers: [NodesService, NodesListService, NodesReadService],
   exports: [NodesService],
 })
 export class NodesModule {}
