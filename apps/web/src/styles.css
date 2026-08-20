@@ -1,6 +1,25 @@
 @import 'tailwindcss';
 
 :root {
+  --background: 40 24% 97%;
+  --foreground: 221 24% 14%;
+  --surface: 40 33% 99%;
+  --surface-subtle: 216 24% 96%;
+  --muted: 216 20% 95%;
+  --muted-foreground: 218 12% 42%;
+  --border: 216 18% 86%;
+  --primary: 226 82% 53%;
+  --primary-hover: 226 75% 45%;
+  --primary-foreground: 0 0% 100%;
+  --sidebar: 219 45% 10%;
+  --sidebar-foreground: 216 24% 94%;
+  --destructive: 356 56% 49%;
+  --ring: 226 82% 53%;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  color: hsl(var(--foreground));
+  background: hsl(var(--background));
   font-family:
     Inter,
     ui-sans-serif,
@@ -9,8 +28,6 @@
     BlinkMacSystemFont,
     'Segoe UI',
     sans-serif;
-  color: #172033;
-  background: #f4f6f9;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -19,10 +36,15 @@
   box-sizing: border-box;
 }
 
+html {
+  background: hsl(var(--background));
+}
+
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 button,
@@ -32,39 +54,238 @@ select {
   font: inherit;
 }
 
-.app-shell {
+button {
+  touch-action: manipulation;
+}
+
+.auth-shell {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
+  grid-template-columns: minmax(0, 1.08fr) minmax(420px, 0.92fr);
+  background: hsl(var(--background));
+}
+
+.auth-editorial,
+.auth-surface {
+  min-width: 0;
+  padding: clamp(40px, 7vw, 104px);
+}
+
+.auth-editorial {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  color: hsl(var(--sidebar-foreground));
+  background: hsl(var(--sidebar));
+}
+
+.auth-editorial h1 {
+  max-width: 13ch;
+  margin: 24px 0;
+  font-family: Georgia, Cambria, 'Times New Roman', serif;
+  font-size: clamp(2.75rem, 5vw, 5.4rem);
+  font-weight: 400;
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+}
+
+.auth-editorial p {
+  max-width: 35rem;
+  margin: 0;
+  color: hsl(var(--sidebar-foreground) / 0.74);
+  font-size: 1rem;
+  line-height: 1.7;
+}
+
+.auth-editorial .auth-editorial__assurance {
+  margin-top: clamp(48px, 8vh, 96px);
+  padding-top: 20px;
+  border-top: 1px solid hsl(var(--sidebar-foreground) / 0.18);
+  color: hsl(var(--sidebar-foreground) / 0.9);
+  font-size: 0.875rem;
+}
+
+.auth-surface {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: hsl(var(--surface));
+}
+
+.auth-card {
+  width: min(30rem, 100%);
+  margin-inline: auto;
+}
+
+.auth-card h2,
+.auth-state h1 {
+  margin: 16px 0;
+  font-family: Georgia, Cambria, 'Times New Roman', serif;
+  font-size: clamp(2rem, 4vw, 3.15rem);
+  font-weight: 400;
+  line-height: 1.06;
+  letter-spacing: -0.035em;
+}
+
+.auth-card > p,
+.auth-state > p,
+.workspace-shell p {
+  color: hsl(var(--muted-foreground));
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+.auth-card button {
+  width: 100%;
+  min-height: 48px;
+  margin-top: 24px;
+  border: 1px solid hsl(var(--primary));
+  border-radius: var(--radius-md);
+  color: hsl(var(--primary-foreground));
+  background: hsl(var(--primary));
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    background-color 180ms ease-out,
+    border-color 180ms ease-out;
+}
+
+.auth-card button:hover:not(:disabled) {
+  border-color: hsl(var(--primary-hover));
+  background: hsl(var(--primary-hover));
+}
+
+.auth-card button:focus-visible {
+  outline: 3px solid hsl(var(--ring) / 0.32);
+  outline-offset: 3px;
+}
+
+.auth-card button:disabled {
+  opacity: 0.48;
+  cursor: wait;
+}
+
+.auth-error {
+  padding: 12px 0 0;
+  color: hsl(var(--destructive));
+  font-weight: 600;
+}
+
+.auth-privacy {
+  width: min(30rem, 100%);
+  margin: 40px auto 0;
+  padding-top: 20px;
+  border-top: 1px solid hsl(var(--border));
+  color: hsl(var(--muted-foreground));
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.auth-shell--state {
+  grid-template-columns: 1fr;
   place-items: center;
-  padding: 32px;
+  padding: 24px;
 }
 
-.hero {
-  width: min(720px, 100%);
-  border: 1px solid #e1e6ee;
-  border-radius: 20px;
-  background: #ffffff;
-  box-shadow: 0 20px 60px rgb(23 32 51 / 8%);
+.auth-state {
+  width: min(36rem, 100%);
   padding: clamp(28px, 6vw, 56px);
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-lg);
+  background: hsl(var(--surface));
 }
 
-.eyebrow {
-  color: #5b6475;
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+.skeleton {
+  width: 100%;
+  height: 8.5rem;
+  margin-bottom: 24px;
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius-md);
+  background: hsl(var(--surface-subtle));
 }
 
-h1 {
-  margin: 12px 0 16px;
-  font-size: clamp(2rem, 6vw, 3.5rem);
-  line-height: 1.02;
+.workspace-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 48px clamp(24px, 7vw, 100px);
+  background: hsl(var(--background));
+}
+
+.workspace-shell h1 {
+  margin: 16px 0;
+  font-family: Georgia, Cambria, 'Times New Roman', serif;
+  font-size: clamp(2.125rem, 5vw, 3.625rem);
+  font-weight: 400;
+  line-height: 1.05;
   letter-spacing: -0.04em;
 }
 
-p,
-li {
-  color: #505a6c;
-  line-height: 1.65;
+.eyebrow {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.75rem;
+  font-weight: 750;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.eyebrow--inverse {
+  color: hsl(var(--sidebar-foreground) / 0.64);
+}
+
+.muted {
+  color: hsl(var(--muted-foreground));
+  font-size: 0.875rem;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 767px) {
+  .auth-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-editorial,
+  .auth-surface {
+    padding: 32px 24px;
+  }
+
+  .auth-editorial {
+    min-height: 42vh;
+  }
+
+  .auth-editorial h1 {
+    margin: 16px 0;
+    font-size: clamp(2.25rem, 11vw, 3.5rem);
+    line-height: 1.02;
+  }
+
+  .auth-editorial .auth-editorial__assurance {
+    margin-top: 32px;
+  }
+
+  .auth-surface {
+    min-height: 58vh;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }

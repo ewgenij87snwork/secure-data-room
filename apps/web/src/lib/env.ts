@@ -11,4 +11,5 @@ const publicEnvSchema = z.object({
   VITE_BUILD_SHA: z.string().min(1).default('local'),
 });
 
-export const publicEnv = publicEnvSchema.parse(import.meta.env);
+export const webEnv = publicEnvSchema.parse(import.meta.env);
+export const publicEnv = webEnv;

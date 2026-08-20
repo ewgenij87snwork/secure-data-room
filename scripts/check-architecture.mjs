@@ -1,5 +1,5 @@
 import { readFile, readdir } from 'node:fs/promises';
-import { extname, join, relative } from 'node:path';
+import { extname, join, relative, sep } from 'node:path';
 
 const root = new URL('..', import.meta.url);
 const failures = [];
@@ -56,13 +56,15 @@ if (!/tokenHash\s+Bytes/u.test(schema)) failures.push('Public share token hash f
 const appFiles = (await walk(join(rootPath, 'apps'))).filter((file) =>
   ['.ts', '.tsx'].includes(extname(file)),
 );
+const browserRoot = `${join('apps', 'web')}${sep}`;
 for (const file of appFiles) {
   const text = await readFile(file, 'utf8');
-  if (/SUPABASE_SERVICE_ROLE_KEY/u.test(text) && file.includes('/web/')) {
-    failures.push(`${relative(rootPath, file)} references the service-role key in browser code.`);
+  const repositoryPath = relative(rootPath, file);
+  if (/SUPABASE_SERVICE_ROLE_KEY/u.test(text) && repositoryPath.startsWith(browserRoot)) {
+    failures.push(`${repositoryPath} references the service-role key in browser code.`);
   }
   if (/dangerouslySetInnerHTML/u.test(text)) {
-    failures.push(`${relative(rootPath, file)} uses dangerouslySetInnerHTML.`);
+    failures.push(`${repositoryPath} uses dangerouslySetInnerHTML.`);
   }
 }
 
