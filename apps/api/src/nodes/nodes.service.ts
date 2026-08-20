@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../database/prisma.service.js';
 import type { AuthenticatedPrincipal } from '../auth/principal.js';
+import type { AccessPrincipal } from '../access-control/access-policy.types.js';
 import {
   AccessPolicyService,
   AccessDeniedException,
@@ -184,7 +185,7 @@ export class NodesService {
     }
   }
 
-  async createViewUrl(principal: AuthenticatedPrincipal, nodeId: string): Promise<ViewUrlResponse> {
+  async createViewUrl(principal: AccessPrincipal, nodeId: string): Promise<ViewUrlResponse> {
     const access = await this.accessPolicy.assertCanReadNode(principal, nodeId);
     let node: PersistedNodeRow | null;
     try {

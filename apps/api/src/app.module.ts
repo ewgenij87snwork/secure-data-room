@@ -7,6 +7,7 @@ import { AccessControlModule } from './access-control/access-control.module.js';
 import { NodesModule } from './nodes/nodes.module.js';
 import { UploadsModule } from './uploads/uploads.module.js';
 import { CleanupModule } from './cleanup/cleanup.module.js';
+import { SharesModule } from './shares/shares.module.js';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { CleanupModule } from './cleanup/cleanup.module.js';
     NodesModule,
     UploadsModule,
     CleanupModule,
+    SharesModule,
   ],
 })
 export class AppModule {}

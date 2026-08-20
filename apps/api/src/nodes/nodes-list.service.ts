@@ -1,7 +1,7 @@
 import { HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
 import type { AccessRole, ListNodeChildrenResponse, PaginationQuery } from '@data-room/contracts';
 import type { Prisma } from '../generated/prisma/client.js';
-import type { AuthenticatedPrincipal } from '../auth/principal.js';
+import type { AccessPrincipal } from '../access-control/access-policy.types.js';
 import {
   AccessPolicyService,
   type AccessibleNode,
@@ -26,7 +26,7 @@ export class NodesListService {
   ) {}
 
   async listChildren(
-    principal: AuthenticatedPrincipal,
+    principal: AccessPrincipal,
     parentId: string,
     query: PaginationQuery,
   ): Promise<ListNodeChildrenResponse> {

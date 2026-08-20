@@ -1,7 +1,7 @@
 import { HttpException, HttpStatus, Inject, Injectable } from '@nestjs/common';
 import type { BreadcrumbItem, NodeBreadcrumbsResponse, NodeSummary } from '@data-room/contracts';
 import type { Prisma } from '../generated/prisma/client.js';
-import type { AuthenticatedPrincipal } from '../auth/principal.js';
+import type { AccessPrincipal } from '../access-control/access-policy.types.js';
 import {
   AccessDeniedException,
   AccessPolicyService,
@@ -22,7 +22,7 @@ export class NodesReadService {
     private readonly accessPolicy: AccessPolicyService,
   ) {}
 
-  async getNode(principal: AuthenticatedPrincipal, nodeId: string): Promise<NodeSummary> {
+  async getNode(principal: AccessPrincipal, nodeId: string): Promise<NodeSummary> {
     const access = await this.accessPolicy.assertCanReadNode(principal, nodeId);
     try {
       const rows = await this.prisma.$queryRaw<NodeRow[]>(
@@ -37,7 +37,7 @@ export class NodesReadService {
   }
 
   async getBreadcrumbs(
-    principal: AuthenticatedPrincipal,
+    principal: AccessPrincipal,
     nodeId: string,
   ): Promise<NodeBreadcrumbsResponse> {
     const access = await this.accessPolicy.assertCanReadNode(principal, nodeId);

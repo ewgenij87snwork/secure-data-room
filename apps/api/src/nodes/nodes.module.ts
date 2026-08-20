@@ -14,6 +14,6 @@ import { DeleteService } from './delete.service.js';
   imports: [PrismaModule, AuthModule, AccessControlModule, RuntimeControlsModule, StorageModule],
   controllers: [NodesController],
   providers: [NodesService, NodesListService, NodesReadService, DeleteService],
-  exports: [NodesService],
+  exports: [NodesService, NodesListService, NodesReadService],
 })
 export class NodesModule {}
