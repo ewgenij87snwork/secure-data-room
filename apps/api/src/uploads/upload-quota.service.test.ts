@@ -29,7 +29,7 @@ describe('UploadQuotaService', () => {
   });
 
   it('counts active reservations in the SQL quota query', async () => {
-    const query = vi.fn().mockResolvedValue([{ activeSessions: 1, reservedBytes: 50, finalizedBytes: 40, activeFiles: 1 }]);
+    const query = vi.fn<(sql: { strings: readonly string[] }) => Promise<unknown>>().mockResolvedValue([{ activeSessions: 1, reservedBytes: 50, finalizedBytes: 40, activeFiles: 1 }]);
     await expect(new UploadQuotaService().assertBatchFits({ $queryRaw: query } as never, '11111111-1111-4111-8111-111111111111', 1, 10)).resolves.toBeUndefined();
     expect(query.mock.calls[0]?.[0]?.strings.join('')).toContain('sum("expectedSizeBytes")');
   });

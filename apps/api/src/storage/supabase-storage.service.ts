@@ -29,7 +29,7 @@ export class SupabaseStorageService extends StorageService {
 
   async createSignedUpload(storageKey: string) {
     const result = await this.bucket.createSignedUploadUrl(storageKey, { upsert: false });
-    if (result.error || !result.data?.token) throw new Error('Storage signing failed.');
+    if (result.error || !result.data.token) throw new Error('Storage signing failed.');
     return {
       token: result.data.token,
       bucketName: this.config.STORAGE_BUCKET,
@@ -44,7 +44,7 @@ export class SupabaseStorageService extends StorageService {
     const name = storageKey.slice(slash + 1);
     const result = await this.bucket.list(folder, { search: name, limit: 2, offset: 0 });
     if (result.error) throw new Error('Storage metadata failed.');
-    const object = result.data?.find((entry) => entry.name === name);
+    const object = result.data.find((entry) => entry.name === name);
     if (!object) return null;
     const metadata = object.metadata as { size?: unknown; mimetype?: unknown } | null | undefined;
     const size = typeof metadata?.size === 'number' ? metadata.size : Number(metadata?.size);
@@ -72,7 +72,7 @@ export class SupabaseStorageService extends StorageService {
 
   async createSignedReadUrl(storageKey: string, ttlSeconds: number): Promise<string> {
     const result = await this.bucket.createSignedUrl(storageKey, ttlSeconds);
-    if (result.error || !result.data?.signedUrl) throw new Error('Storage signing failed.');
+    if (result.error || !result.data.signedUrl) throw new Error('Storage signing failed.');
     return result.data.signedUrl;
   }
 

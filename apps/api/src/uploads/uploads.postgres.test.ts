@@ -57,9 +57,9 @@ run('UploadsService PostgreSQL integration', () => {
     prisma = new PrismaClient({ adapter: new PrismaPg(pool, { schema, disposeExternalPool: false }) });
     service = new UploadsService(
       prisma as never,
-      { assertCanCreateChild: async (principal: typeof owner, parentId: string) => principal.userId === ownerId && parentId === rootId ? { nodeId: rootId, dataRoomId: roomId, parentId: null, kind: 'FOLDER', accessRole: 'OWNER', accessRootNodeId: rootId } : (() => { throw new Error('denied'); })() } as never,
+      { assertCanCreateChild: (principal: typeof owner, parentId: string) => Promise.resolve(principal.userId === ownerId && parentId === rootId ? { nodeId: rootId, dataRoomId: roomId, parentId: null, kind: 'FOLDER', accessRole: 'OWNER', accessRootNodeId: rootId } : (() => { throw new Error('denied'); })()) } as never,
       new RuntimeControlsService(),
-      { createSignedUpload: async (storageKey: string) => ({ token: `token-${storageKey}`, bucketName: 'bucket', tusEndpoint: 'https://example.test/sign', expiresAt: new Date(Date.now() + 60_000) }), getMetadata: async () => ({ sizeBytes: 12, contentType: 'application/pdf' }), readPrefix: async () => Uint8Array.from([37, 80, 68, 70, 45]), createSignedReadUrl: async () => 'https://example.test/read', remove: async () => undefined } as never,
+      { createSignedUpload: (storageKey: string) => Promise.resolve({ token: `token-${storageKey}`, bucketName: 'bucket', tusEndpoint: 'https://example.test/sign', expiresAt: new Date(Date.now() + 60_000) }), getMetadata: () => Promise.resolve({ sizeBytes: 12, contentType: 'application/pdf' }), readPrefix: () => Promise.resolve(Uint8Array.from([37, 80, 68, 70, 45])), createSignedReadUrl: () => Promise.resolve('https://example.test/read'), remove: () => Promise.resolve() },
       new UploadQuotaService(),
     );
   });

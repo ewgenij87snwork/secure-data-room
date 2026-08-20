@@ -7,7 +7,7 @@ describe('SupabaseStorageService', () => {
       data: { token: 'capability-token' },
       error: null,
     });
-    const fetchImpl = vi.fn().mockResolvedValue(new Response(Uint8Array.from([37, 80, 68, 70, 45, 99]), { status: 206 }));
+    const fetchImpl = vi.fn<(input: string, init?: RequestInit) => Promise<Response>>().mockResolvedValue(new Response(Uint8Array.from([37, 80, 68, 70, 45, 99]), { status: 206 }));
     const service = new SupabaseStorageService(
       {
         storage: { from: () => ({ createSignedUploadUrl }) },
@@ -19,7 +19,7 @@ describe('SupabaseStorageService', () => {
       {
         SUPABASE_URL: 'https://project.supabase.co',
         STORAGE_BUCKET: 'data-room-pdfs',
-      } as never,
+      },
       fetchImpl,
     );
 
@@ -36,7 +36,7 @@ describe('SupabaseStorageService', () => {
     const createSignedUploadUrl = vi.fn().mockResolvedValue({ data: { token: 'capability-token' }, error: null });
     const service = new SupabaseStorageService(
       { storage: { from: () => ({ createSignedUploadUrl }) } } as never,
-      { SUPABASE_URL: 'http://127.0.0.1:54321', STORAGE_BUCKET: 'data-room-pdfs' } as never,
+      { SUPABASE_URL: 'http://127.0.0.1:54321', STORAGE_BUCKET: 'data-room-pdfs' },
     );
     await expect(service.createSignedUpload('key')).resolves.toMatchObject({
       tusEndpoint: 'http://127.0.0.1:54321/storage/v1/upload/resumable/sign',
@@ -49,12 +49,14 @@ describe('SupabaseStorageService', () => {
     const fetchImpl = vi.fn().mockResolvedValue(new Response(Uint8Array.from([37, 80, 68, 70, 45, 99]), { status: 206 }));
     const service = new SupabaseStorageService(
       { storage: { from: () => ({}) } } as never,
-      { SUPABASE_URL: 'https://project.supabase.co', STORAGE_BUCKET: 'data-room-pdfs', SUPABASE_SERVICE_ROLE_KEY: serviceRoleKey } as never,
+      { SUPABASE_URL: 'https://project.supabase.co', STORAGE_BUCKET: 'data-room-pdfs', SUPABASE_SERVICE_ROLE_KEY: serviceRoleKey },
       fetchImpl,
     );
     await expect(service.readPrefix('rooms/r/objects/o', 5)).resolves.toEqual(Uint8Array.from([37, 80, 68, 70, 45]));
+     
     expect(fetchImpl).toHaveBeenCalledWith(
       'https://project.supabase.co/storage/v1/object/data-room-pdfs/rooms/r/objects/o',
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       expect.objectContaining({ headers: expect.objectContaining({ Range: 'bytes=0-4', Authorization: `Bearer ${serviceRoleKey}`, apikey: serviceRoleKey }) }),
     );
   });

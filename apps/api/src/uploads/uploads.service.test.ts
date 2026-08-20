@@ -26,6 +26,9 @@ const input = prepareUploadRequestSchema.parse({
 const clientId = input.files[0]?.clientId;
 if (!clientId) throw new Error('Test fixture must include a client id.');
 
+interface UpdateWhere extends Record<string, unknown> { status?: string | { in?: string[] }; storageKey?: string }
+interface UpdateArgs { where: UpdateWhere; data: Record<string, unknown> }
+
 function database() {
     const session = {
     create: vi.fn().mockResolvedValue({
@@ -57,12 +60,12 @@ function database() {
       fileNodeId: null,
     }),
     update: vi.fn(),
-    updateMany: vi.fn().mockResolvedValue({ count: 1 }),
+    updateMany: vi.fn<(args: UpdateArgs) => Promise<{ count: number }>>().mockResolvedValue({ count: 1 }),
   };
   return {
     uploadSession: session,
     node: { create: vi.fn(), findUnique: vi.fn(), findMany: vi.fn() },
-    $transaction: vi.fn(async (callback: (tx: unknown) => unknown) => callback({
+    $transaction: vi.fn((callback: (tx: unknown) => unknown) => callback({
       uploadSession: session,
       node: { create: session.create, findUnique: session.findUnique },
       $queryRaw: vi.fn()
@@ -79,7 +82,7 @@ function service(overrides: { controls?: object; storage?: object; db?: ReturnTy
   const controls = { read: vi.fn().mockResolvedValue({ uploadsEnabled: true, maintenanceMode: false, ...(overrides.controls ?? {}) }) };
   const storage = { createSignedUpload: vi.fn().mockResolvedValue({ token: 'token-token-token', tusEndpoint: 'https://project.supabase.co/storage/v1/upload/resumable', expiresAt: new Date('2026-08-20T12:00:00.000Z') }), getMetadata: vi.fn().mockResolvedValue({ sizeBytes: 12, contentType: 'application/pdf' }), readPrefix: vi.fn().mockResolvedValue(Uint8Array.from([37, 80, 68, 70, 45])), remove: vi.fn(), ...(overrides.storage ?? {}) };
   const quota = { assertBatchFits: vi.fn().mockResolvedValue(undefined), ...(overrides.quota ?? {}) };
-  return { service: new UploadsService(db as never, policy as never, controls as never, storage as never, quota as never), db, policy, controls, storage, quota };
+  return { service: new UploadsService(db as never, policy as never, controls, storage as never, quota), db, policy, controls, storage, quota };
 }
 
 function deferred<T>() {
@@ -113,8 +116,11 @@ describe('UploadsService', () => {
     });
     const { service: subject } = service({ db });
     await subject.prepare(owner, input);
+     
     expect(db.uploadSession.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       where: expect.objectContaining({ id: '66666666-6666-4666-8666-666666666666' }),
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
       data: expect.objectContaining({ status: 'PREPARED', storageKey: expect.stringMatching(/\/objects\/[0-9a-f-]{36}$/u) }),
     }));
   });
@@ -131,23 +137,25 @@ describe('UploadsService', () => {
       .mockResolvedValueOnce({ token: 'token-token-token', bucketName: 'bucket', tusEndpoint: 'https://example.test/sign', expiresAt: new Date(Date.now() + 60_000) })
       .mockRejectedValueOnce(new Error('provider')) } });
     await expect(subject.prepare(owner, batch)).resolves.toMatchObject({ uploads: [{ clientId: input.files[0]!.clientId }] });
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     expect(db.uploadSession.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ id: '66666666-6666-4666-8666-666666666667' }), data: { status: 'REJECTED' } }));
     expect(storage.remove).toHaveBeenCalledWith(['rooms/r/objects/two']);
   });
 
   it('does not let a competing signing failure reject a session after success won the CAS', async () => {
     const db = database();
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const session = await db.uploadSession.findUnique({ where: {} });
     if (!session) throw new Error('missing session fixture');
     let status = 'PREPARED';
     db.uploadSession.findUnique.mockResolvedValue({ ...session, status });
-    db.uploadSession.updateMany.mockImplementation(async ({ where, data }) => {
-      const statusFilter = typeof where.status === 'string' ? [where.status] : (where.status?.in as string[] | undefined);
+    db.uploadSession.updateMany.mockImplementation(({ where, data }) => {
+      const statusFilter = typeof where.status === 'string' ? [where.status] : (where.status?.in);
       if (statusFilter?.includes(status)) {
         status = data.status as string;
-        return { count: 1 };
+        return Promise.resolve({ count: 1 });
       }
-      return { count: 0 };
+      return Promise.resolve({ count: 0 });
     });
     const success = deferred<{ token: string; bucketName: string; tusEndpoint: string; expiresAt: Date }>();
     const failure = deferred<never>();
@@ -171,9 +179,10 @@ describe('UploadsService', () => {
     const db = database();
     const oldKey = 'rooms/r/objects/old-generation';
     const newKey = 'rooms/r/objects/new-generation';
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const oldSession = { ...(await db.uploadSession.findUnique({ where: {} }))!, storageKey: oldKey };
     db.uploadSession.findUnique.mockResolvedValueOnce(oldSession).mockResolvedValue({ ...oldSession, storageKey: newKey, status: 'PREPARED' });
-    db.uploadSession.updateMany.mockImplementation(async ({ where }) => ({ count: where.storageKey === newKey ? 1 : 0 }));
+    db.uploadSession.updateMany.mockImplementation(({ where }) => Promise.resolve({ count: where.storageKey === newKey ? 1 : 0 }));
     const signing = deferred<{ token: string; bucketName: string; tusEndpoint: string; expiresAt: Date }>();
     const { service: subject, storage } = service({ db, storage: { createSignedUpload: vi.fn().mockReturnValue(signing.promise) } });
 
@@ -183,6 +192,7 @@ describe('UploadsService', () => {
 
     await expect(pending).rejects.toMatchObject({ response: { error: { code: 'INTERNAL_ERROR' } } });
     expect(storage.remove).toHaveBeenCalledWith([oldKey]);
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     expect(db.uploadSession.updateMany).toHaveBeenCalledWith(expect.objectContaining({ where: expect.objectContaining({ storageKey: oldKey }) }));
   });
 
@@ -205,7 +215,7 @@ describe('UploadsService', () => {
   it('re-proves the policy parent and room inside the transaction before reserving quota', async () => {
     const db = database();
     const queryRaw = vi.fn().mockResolvedValue([]);
-    db.$transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => callback({
+    db.$transaction.mockImplementation((callback: (tx: unknown) => unknown) => callback({
       uploadSession: db.uploadSession,
       node: db.node,
       $queryRaw: queryRaw,
@@ -224,8 +234,11 @@ describe('UploadsService', () => {
     db.uploadSession.findUnique.mockResolvedValue(null);
     const { service: subject, storage } = service({ db, storage: { createSignedUpload: vi.fn().mockRejectedValue(new Error('provider')) } });
     await expect(subject.prepare(owner, input)).rejects.toBeInstanceOf(ApiException);
+     
     expect(db.uploadSession.create).toHaveBeenCalledWith(expect.objectContaining({
-      data: expect.objectContaining({
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+        data: expect.objectContaining({
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
         storageKey: expect.stringMatching(/^rooms\/33333333-3333-4333-8333-333333333333\/objects\/[0-9a-f-]{36}$/u),
       }),
     }));
@@ -264,16 +277,20 @@ describe('UploadsService', () => {
   it('selects the first available deterministic suffix under a unique-name conflict', async () => {
     const db = database();
     let creates = 0;
-    db.node.create.mockImplementation(async ({ data }) => {
+    db.node.create.mockImplementation(({ data }) => {
       creates += 1;
-      if (creates === 1) throw { code: 'P2002' };
-      return { id: '77777777-7777-4777-8777-777777777777', name: String(data.name) };
+      if (creates === 1) {
+        const conflict = new Error('P2002');
+        Object.assign(conflict, { code: 'P2002' });
+        throw conflict;
+      }
+      return { id: '77777777-7777-4777-8777-777777777777', name: String((data as { name: unknown }).name) };
     });
     let attempt = 0;
-    db.$transaction.mockImplementation(async (callback: (tx: unknown) => unknown) => {
+    db.$transaction.mockImplementation((callback: (tx: unknown) => unknown) => {
       attempt += 1;
       let queryCall = 0;
-      const queryRaw = vi.fn(async () => {
+      const queryRaw = vi.fn(() => {
         queryCall += 1;
         if (queryCall === 1) return [{
           id: '66666666-6666-4666-8666-666666666666', ownerId: owner.userId, parentNodeId: parent.nodeId,

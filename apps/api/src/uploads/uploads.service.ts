@@ -96,7 +96,7 @@ export class UploadsService {
     });
     if (activated.count !== 1) {
       const current = await this.prisma.uploadSession.findUnique({ where: { id: session.id } });
-      if (!current || current.ownerId !== session.ownerId || current.clientId !== session.clientId || current.storageKey !== session.storageKey || current.status !== 'UPLOADING') {
+      if (!current?.ownerId || current.ownerId !== session.ownerId || current.clientId !== session.clientId || current.storageKey !== session.storageKey || current.status !== 'UPLOADING') {
         try { await this.storage.remove([session.storageKey]); } catch { /* no capability is returned for terminal state */ }
         throw uploadGone();
       }
@@ -124,11 +124,11 @@ export class UploadsService {
       FOR UPDATE OF n, r
     `);
     const lockedParent = parentRows[0];
-    if (!lockedParent || lockedParent.id !== parent.nodeId || lockedParent.dataRoomId !== parent.dataRoomId || lockedParent.ownerId !== principal.userId || lockedParent.kind !== 'FOLDER' || lockedParent.deletedAt !== null) throw uploadGone();
+    if (!lockedParent?.id || lockedParent.id !== parent.nodeId || lockedParent.dataRoomId !== parent.dataRoomId || lockedParent.ownerId !== principal.userId || lockedParent.kind !== 'FOLDER' || lockedParent.deletedAt !== null) throw uploadGone();
     await tx.$queryRaw(Prisma.sql`SELECT id FROM "UserProfile" WHERE id = ${principal.userId}::uuid FOR UPDATE`);
     const sessions: UploadSessionRow[] = [];
-    const creates: Array<{ data: Record<string, unknown> }> = [];
-    const reinitializations: Array<{ id: string; data: Record<string, unknown> }> = [];
+    const creates: { data: Record<string, unknown> }[] = [];
+    const reinitializations: { id: string; data: Record<string, unknown> }[] = [];
     let newReservations = 0;
     let newBytes = 0;
     for (const file of input.files) {
@@ -167,7 +167,7 @@ export class UploadsService {
 
   async finalize(principal: AuthenticatedPrincipal, sessionId: string, input: { clientId: string }): Promise<FinalizeUploadResponse> {
     const first = await this.prisma.uploadSession.findUnique({ where: { id: sessionId } });
-    if (!first || first.ownerId !== principal.userId || first.clientId !== input.clientId) throw uploadGone();
+    if (!first?.ownerId || first.ownerId !== principal.userId || first.clientId !== input.clientId) throw uploadGone();
     if (first.status === 'FINALIZED' && first.fileNodeId) return this.existingResult(first, input.clientId);
     if (first.status === 'CANCELLED' || first.status === 'REJECTED' || first.status === 'EXPIRED') throw uploadGone();
     if (first.expiresAt.getTime() <= Date.now()) return this.expire(first);
@@ -187,7 +187,7 @@ export class UploadsService {
 
   async cancel(principal: AuthenticatedPrincipal, sessionId: string): Promise<void> {
     const session = await this.prisma.uploadSession.findUnique({ where: { id: sessionId } });
-    if (!session || session.ownerId !== principal.userId || session.status === 'FINALIZED') return;
+    if (!session?.ownerId || session.ownerId !== principal.userId || session.status === 'FINALIZED') return;
     const changed = await this.prisma.uploadSession.updateMany({ where: { id: session.id, ownerId: principal.userId, status: { not: 'FINALIZED' } }, data: { status: 'CANCELLED' } });
     if (changed.count > 0) {
       try { await this.storage.remove([session.storageKey]); } catch { /* cleanup is best effort */ }
@@ -197,7 +197,7 @@ export class UploadsService {
   private async finalizeInTransaction(tx: UploadTransaction, sessionId: string, ownerId: string, clientId: string): Promise<FinalizeUploadResponse> {
     const locked = await tx.$queryRaw<UploadSessionRow[]>(Prisma.sql`SELECT id, "ownerId", "parentNodeId", "clientId", "storageKey", "requestedName", "normalizedName", "expectedSizeBytes", "mimeType", status, "expiresAt", "fileNodeId" FROM "UploadSession" WHERE id = ${sessionId}::uuid FOR UPDATE`);
     const current = locked[0];
-    if (!current || current.ownerId !== ownerId || current.clientId !== clientId) throw uploadGone();
+    if (!current?.ownerId || current.ownerId !== ownerId || current.clientId !== clientId) throw uploadGone();
     if (current.status === 'FINALIZED' && current.fileNodeId) return this.existingResult(current, clientId, tx);
     if (current.status !== 'PREPARED' && current.status !== 'UPLOADING') throw uploadGone();
     if (current.expiresAt.getTime() <= Date.now()) {
@@ -213,7 +213,7 @@ export class UploadsService {
       FOR UPDATE OF n, r
     `);
     const parent = parentRows[0];
-    if (!parent || parent.ownerId !== current.ownerId || parent.kind !== 'FOLDER' || parent.deletedAt !== null) throw uploadGone();
+    if (!parent?.ownerId || parent.ownerId !== current.ownerId || parent.kind !== 'FOLDER' || parent.deletedAt !== null) throw uploadGone();
     const candidates = Array.from({ length: 101 }, (_, suffix) => suffix === 0 ? current.requestedName : uploadSuffixName(current.requestedName, suffix));
     const occupied = await tx.$queryRaw<Readonly<{ normalizedName: string }>[]>(Prisma.sql`SELECT "normalizedName" FROM "Node" WHERE "parentId" = ${parent.id}::uuid AND "deletedAt" IS NULL AND "normalizedName" IN (${Prisma.join(candidates.map(normalizedNodeName))})`);
     const used = new Set(occupied.map((row) => row.normalizedName));
@@ -230,7 +230,7 @@ export class UploadsService {
   private async verifyObject(session: UploadSessionRow): Promise<void> {
     try {
       const metadata = await this.storage.getMetadata(session.storageKey);
-      if (!metadata || metadata.sizeBytes !== Number(session.expectedSizeBytes) || metadata.contentType?.toLowerCase() !== 'application/pdf') throw notReady();
+      if (metadata?.sizeBytes !== Number(session.expectedSizeBytes) || metadata.contentType?.toLowerCase() !== 'application/pdf') throw notReady();
       const prefix = await this.storage.readPrefix(session.storageKey, PDF_SIGNATURE.length);
       if (!startsWith(prefix, PDF_SIGNATURE)) throw notReady();
     } catch (error) {
@@ -251,7 +251,6 @@ export class UploadsService {
   }
 }
 
-function totalBytes(input: PrepareUploadRequest): number { return input.files.reduce((sum, file) => sum + file.sizeBytes, 0); }
 function startsWith(value: Uint8Array, prefix: Uint8Array): boolean { return prefix.every((byte, index) => value[index] === byte); }
 function uploadSuffixName(name: string, suffixNumber: number): string {
   const suffix = ` (${suffixNumber})`;
