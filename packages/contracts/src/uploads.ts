@@ -22,6 +22,7 @@ export const prepareUploadRequestSchema = z.object({
 export const preparedUploadSchema = z.object({
   clientId: uuidSchema,
   sessionId: uuidSchema,
+  bucketName: z.string().min(1).max(63),
   storageKey: z.string().min(1).max(300),
   tusEndpoint: z.url(),
   uploadToken: z.string().min(16),

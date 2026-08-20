@@ -8,6 +8,7 @@ import {
   prepareUploadRequestSchema,
   listNodeChildrenResponseSchema,
   nodeBreadcrumbsResponseSchema,
+  preparedUploadSchema,
 } from './index.js';
 
 const validBootstrapResponse = {
@@ -81,6 +82,24 @@ describe('shared contracts', () => {
         files: [{ ...request.files[0], sizeBytes: MAX_PDF_BYTES + 1 }],
       }),
     ).toThrow();
+  });
+
+  it('requires and preserves the prepared upload bucket name', () => {
+    const preparedUpload = {
+      clientId: '6ba7b810-9dad-41d1-80b4-00c04fd430c8',
+      sessionId: '750e8400-e29b-41d4-a716-446655440000',
+      bucketName: 'secure-data-room',
+      storageKey: 'uploads/6ba7b810-9dad-41d1-80b4-00c04fd430c8.pdf',
+      tusEndpoint: 'https://storage.example.com/upload/resumable',
+      uploadToken: '1234567890abcdef',
+      expiresAt: '2026-01-01T00:00:00.000+02:00',
+    } as const;
+
+    expect(preparedUploadSchema.parse(preparedUpload)).toEqual(preparedUpload);
+    expect(() => {
+      const { bucketName: _bucketName, ...withoutBucketName } = preparedUpload;
+      preparedUploadSchema.parse(withoutBucketName);
+    }).toThrow();
   });
 
   it('keeps error codes stable and machine-readable', () => {
