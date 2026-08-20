@@ -198,10 +198,11 @@ run('SharesService PostgreSQL integration', () => {
     const created = await shares.createPublic(owner, ids.target);
     const token = created.url.split('#token=')[1]!;
     const row = await prisma.share.findUnique({ where: { id: created.shareId } });
-    expect(row?.tokenHash).toBeInstanceOf(Buffer);
-    expect((row?.tokenHash as Buffer).length).toBe(32);
-    expect((row?.tokenHash as Buffer).toString('base64url')).not.toBe(token);
-    expect(row?.tokenHash?.toString()).not.toContain(token);
+    expect(row?.tokenHash).toBeInstanceOf(Uint8Array);
+    const tokenHash = Buffer.from(row?.tokenHash ?? []);
+    expect(tokenHash.length).toBe(32);
+    expect(tokenHash.toString('base64url')).not.toBe(token);
+    expect(tokenHash.toString()).not.toContain(token);
 
     const publicPrincipal = await shares.resolvePublic(token);
     await expect(policy.assertCanReadNode(publicPrincipal, ids.target)).resolves.toMatchObject({

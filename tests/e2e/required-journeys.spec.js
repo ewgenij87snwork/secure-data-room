@@ -36,9 +36,60 @@ function responseId(body, ...keys) {
 function publicShareToken(rawUrl) {
   const fragment = new URL(rawUrl).hash.slice(1);
   const token = new URLSearchParams(fragment).get('token') ?? fragment;
-  expect(token.length).toBeGreaterThanOrEqual(40);
-  expect(/\s/u.test(token)).toBe(false);
+  expect(token).toMatch(/^[A-Za-z0-9_-]{43}$/u);
   return token;
+}
+
+function uploadApiKind(request) {
+  const pathname = new URL(request.url()).pathname;
+  if (request.method() === 'POST' && /\/uploads\/prepare\/?$/u.test(pathname)) return 'prepare';
+  if (request.method() === 'POST' && /\/uploads\/[^/]+\/finalize\/?$/u.test(pathname))
+    return 'finalize';
+  if (request.method() === 'DELETE' && /\/uploads\/[^/]+\/?$/u.test(pathname)) return 'cancel';
+  return null;
+}
+
+function uploadApiFact(request, kind) {
+  const bodyText = request.postData() ?? '';
+  let bodyKeys = [];
+  let fileKeys = [];
+  try {
+    const body = JSON.parse(bodyText);
+    if (body && typeof body === 'object' && !Array.isArray(body)) {
+      bodyKeys = Object.keys(body).sort();
+      const firstFile = Array.isArray(body.files) ? body.files[0] : null;
+      if (firstFile && typeof firstFile === 'object' && !Array.isArray(firstFile))
+        fileKeys = Object.keys(firstFile).sort();
+    }
+  } catch {
+    // Empty DELETE bodies and malformed payloads remain observable through the safe facts below.
+  }
+  const headers = request.headers();
+  return {
+    kind,
+    method: request.method(),
+    bodyLength: Buffer.byteLength(bodyText),
+    bodyKeys,
+    fileKeys,
+    hasPdfBytes: bodyText.includes('%PDF-') || bodyText.includes('JVBERi0'),
+    hasCapabilityField: /"(?:uploadToken|token|signature|capability)"/iu.test(bodyText),
+    hasSignatureHeader: Boolean(headers['x-signature']),
+  };
+}
+
+function preparedUploadEvidence(body) {
+  expect(Array.isArray(body?.uploads)).toBe(true);
+  expect(body?.uploads?.length).toBe(1);
+  const prepared = body.uploads[0];
+  expect(prepared?.clientId).toMatch(uuidPattern);
+  expect(prepared?.sessionId).toMatch(uuidPattern);
+  expect(typeof prepared?.storageKey).toBe('string');
+  expect(prepared.storageKey.length).toBeGreaterThan(0);
+  return {
+    clientId: prepared.clientId,
+    sessionId: prepared.sessionId,
+    storageKey: prepared.storageKey,
+  };
 }
 
 async function shareWithViewer(page) {
@@ -50,8 +101,8 @@ async function shareWithViewer(page) {
       !response.url().includes('/public'),
   );
   await page.getByRole('button', { name: /^share$/i }).click();
-  const dialog = page.getByRole('dialog', { name: /share access/i });
-  await dialog.getByRole('textbox', { name: /recipient email/i }).fill(viewerEmail);
+  const dialog = page.getByRole('dialog', { name: /^share /i });
+  await dialog.getByRole('textbox', { name: /email address/i }).fill(viewerEmail);
   await dialog.getByRole('button', { name: /grant access|share/i }).click();
   const response = await created;
   expect(response.ok()).toBe(true);
@@ -68,7 +119,7 @@ async function createPublicShare(page) {
       response.url().includes('/public'),
   );
   await page.getByRole('button', { name: /^share$/i }).click();
-  const dialog = page.getByRole('dialog', { name: /share access/i });
+  const dialog = page.getByRole('dialog', { name: /^share /i });
   await dialog.getByRole('button', { name: /create public link/i }).click();
   const response = await created;
   expect(response.ok()).toBe(true);
@@ -86,12 +137,11 @@ async function revokeShare(page, share, accessibleName) {
       response.url().includes(`/shares/${share.id}`),
   );
   await page.getByRole('button', { name: /^share$/i }).click();
-  const dialog = page.getByRole('dialog', { name: /share access/i });
-  await dialog
-    .getByRole('button', {
-      name: new RegExp(`revoke.*${escapeRegExp(accessibleName)}`, 'i'),
-    })
-    .click();
+  const dialog = page.getByRole('dialog', { name: /^share /i });
+  const shareRow = dialog
+    .getByRole('listitem')
+    .filter({ hasText: new RegExp(escapeRegExp(accessibleName), 'i') });
+  await shareRow.getByRole('button', { name: /^revoke$/i }).click();
   expect((await revoked).ok()).toBe(true);
   await expect(dialog).toBeHidden();
 }
@@ -290,6 +340,202 @@ test.describe('P6-T3 required journeys', () => {
     }
   });
 
+  test('Owner A: direct TUS retry and in-flight cancel preserve API boundaries', async ({
+    browser,
+  }) => {
+    test.setTimeout(90_000);
+    const context = await actorContext(browser, 'owner');
+    try {
+      const page = await context.newPage();
+      const run = uniqueRunName('upload-hardening');
+      const retryName = `${run}-retry.pdf`;
+      const cancelName = `${run}-cancel.pdf`;
+      const apiFacts = [];
+      const tusFacts = [];
+      let apiOrigin = null;
+      let initialSessionId = null;
+      let cancelSessionId = null;
+      let initialCancelRequests = 0;
+      let cancelRequests = 0;
+      let cancelFinalizations = 0;
+      let transportMode = 'fail';
+      let heldTus = false;
+      let resolveHeldTusSeen;
+      let releaseHeldTus;
+      const heldTusSeen = new Promise((resolve) => {
+        resolveHeldTusSeen = resolve;
+      });
+      const heldTusGate = new Promise((resolve) => {
+        releaseHeldTus = resolve;
+      });
+
+      const captureApiBoundary = (request) => {
+        const kind = uploadApiKind(request);
+        if (!kind) return;
+        apiOrigin ??= new URL(request.url()).origin;
+        apiFacts.push(uploadApiFact(request, kind));
+        const pathname = new URL(request.url()).pathname;
+        if (kind === 'cancel' && initialSessionId && pathname.endsWith(`/${initialSessionId}`))
+          initialCancelRequests += 1;
+        if (kind === 'cancel' && cancelSessionId && pathname.endsWith(`/${cancelSessionId}`))
+          cancelRequests += 1;
+        if (
+          kind === 'finalize' &&
+          cancelSessionId &&
+          pathname.endsWith(`/${cancelSessionId}/finalize`)
+        )
+          cancelFinalizations += 1;
+      };
+      const controlTusTransport = async (route) => {
+        const request = route.request();
+        const headers = request.headers();
+        const isTusWrite =
+          Boolean(headers['tus-resumable']) && ['POST', 'PATCH'].includes(request.method());
+        if (!isTusWrite) {
+          await route.continue();
+          return;
+        }
+
+        tusFacts.push({
+          method: request.method(),
+          hasSignature: Boolean(headers['x-signature']),
+          hasAuthorization: Boolean(headers.authorization),
+          usesDifferentOrigin: apiOrigin ? new URL(request.url()).origin !== apiOrigin : false,
+        });
+        if (transportMode === 'fail' || transportMode === 'abort-cancel') {
+          await route.abort('failed');
+          return;
+        }
+        if (transportMode === 'hold-cancel' && !heldTus) {
+          heldTus = true;
+          resolveHeldTusSeen();
+          await heldTusGate;
+          await route.abort('failed').catch(() => undefined);
+          return;
+        }
+        await route.continue();
+      };
+
+      page.on('request', captureApiBoundary);
+      await page.route('**/*', controlTusTransport);
+      try {
+        await page.goto('/');
+        await createFolder(page, run);
+
+        const firstPrepare = page.waitForResponse(
+          (response) =>
+            response.request().method() === 'POST' &&
+            /\/v1\/uploads\/prepare(?:\?|$)/u.test(response.url()),
+        );
+        await page.locator('input[type="file"]').setInputFiles({
+          name: retryName,
+          mimeType: 'application/pdf',
+          buffer: minimalPdf,
+        });
+        const firstPrepareResponse = await firstPrepare;
+        expect(firstPrepareResponse.ok()).toBe(true);
+        const initialPrepared = preparedUploadEvidence(await firstPrepareResponse.json());
+        initialSessionId = initialPrepared.sessionId;
+
+        const retryItem = page.getByRole('listitem').filter({ hasText: retryName });
+        await expect(retryItem).toContainText('Failed', { timeout: 15_000 });
+        await expect(retryItem.getByRole('alert')).toHaveText('The upload failed. Try again.');
+
+        transportMode = 'allow';
+        const oldSessionCancelled = page.waitForResponse(
+          (response) =>
+            response.request().method() === 'DELETE' &&
+            new URL(response.url()).pathname.endsWith(`/${initialPrepared.sessionId}`),
+        );
+        const retryPreparedResponse = page.waitForResponse(
+          (response) =>
+            response.request().method() === 'POST' &&
+            /\/v1\/uploads\/prepare(?:\?|$)/u.test(response.url()),
+        );
+        const retryFinalized = page.waitForResponse(
+          (response) =>
+            response.request().method() === 'POST' &&
+            /\/v1\/uploads\/[^/]+\/finalize(?:\?|$)/u.test(response.url()),
+        );
+        await retryItem.getByRole('button', { name: /^retry$/i }).click();
+        expect((await oldSessionCancelled).ok()).toBe(true);
+        const retryPrepare = await retryPreparedResponse;
+        expect(retryPrepare.ok()).toBe(true);
+        const retriedPrepared = preparedUploadEvidence(await retryPrepare.json());
+        const finalized = await retryFinalized;
+        expect(finalized.ok()).toBe(true);
+        await expect(retryItem.getByRole('status')).toContainText('Uploaded');
+
+        expect(retriedPrepared.clientId).toBe(initialPrepared.clientId);
+        expect(retriedPrepared.storageKey === initialPrepared.storageKey).toBe(false);
+        expect(initialCancelRequests).toBe(1);
+
+        transportMode = 'hold-cancel';
+        const cancelPreparedResponse = page.waitForResponse(
+          (response) =>
+            response.request().method() === 'POST' &&
+            /\/v1\/uploads\/prepare(?:\?|$)/u.test(response.url()),
+        );
+        await page.locator('input[type="file"]').setInputFiles({
+          name: cancelName,
+          mimeType: 'application/pdf',
+          buffer: minimalPdf,
+        });
+        const cancelPrepare = await cancelPreparedResponse;
+        expect(cancelPrepare.ok()).toBe(true);
+        const cancelPrepared = preparedUploadEvidence(await cancelPrepare.json());
+        cancelSessionId = cancelPrepared.sessionId;
+        await heldTusSeen;
+
+        const cancelItem = page.getByRole('listitem').filter({ hasText: cancelName });
+        await expect(cancelItem).toContainText('Uploading');
+        const cancelled = page.waitForResponse(
+          (response) =>
+            response.request().method() === 'DELETE' &&
+            new URL(response.url()).pathname.endsWith(`/${cancelPrepared.sessionId}`),
+        );
+        await cancelItem.getByRole('button', { name: /^cancel$/i }).click();
+        transportMode = 'abort-cancel';
+        releaseHeldTus();
+        expect((await cancelled).ok()).toBe(true);
+        await expect(cancelItem).toContainText('Cancelled');
+
+        expect(cancelRequests).toBe(1);
+        expect(cancelFinalizations).toBe(0);
+        expect(apiFacts.filter(({ kind }) => kind === 'prepare')).toHaveLength(3);
+        expect(apiFacts.filter(({ kind }) => kind === 'finalize')).toHaveLength(1);
+        expect(apiFacts.filter(({ kind }) => kind === 'cancel')).toHaveLength(2);
+        for (const fact of apiFacts) {
+          expect(fact.hasPdfBytes).toBe(false);
+          expect(fact.hasCapabilityField).toBe(false);
+          expect(fact.hasSignatureHeader).toBe(false);
+        }
+        for (const fact of apiFacts.filter(({ kind }) => kind === 'prepare')) {
+          expect(fact.method).toBe('POST');
+          expect(fact.bodyKeys).toEqual(['files', 'parentId']);
+          expect(fact.fileKeys).toEqual(['clientId', 'mimeType', 'name', 'sizeBytes']);
+          expect(fact.bodyLength).toBeGreaterThan(0);
+        }
+        const finalizeFact = apiFacts.find(({ kind }) => kind === 'finalize');
+        expect(finalizeFact?.bodyKeys).toEqual(['clientId']);
+        expect(finalizeFact?.bodyLength).toBeGreaterThan(0);
+        for (const fact of apiFacts.filter(({ kind }) => kind === 'cancel'))
+          expect(fact.bodyLength).toBe(0);
+        expect(tusFacts.length).toBeGreaterThanOrEqual(3);
+        expect(tusFacts.every(({ hasSignature }) => hasSignature)).toBe(true);
+        expect(tusFacts.every(({ hasAuthorization }) => !hasAuthorization)).toBe(true);
+        expect(tusFacts.every(({ usesDifferentOrigin }) => usesDifferentOrigin)).toBe(true);
+      } finally {
+        transportMode = 'abort-cancel';
+        releaseHeldTus();
+        await page.unroute('**/*', controlTusTransport);
+        page.off('request', captureApiBoundary);
+      }
+    } finally {
+      await context.close();
+    }
+  });
+
   test('Owner A: valid PDF, rename conflict, exact move destination, and delete impact', async ({
     browser,
   }) => {
@@ -341,12 +587,12 @@ test.describe('P6-T3 required journeys', () => {
 
       const moved = page.waitForResponse(
         (item) =>
-          item.request().method() === 'PATCH' && item.url().includes(`/nodes/${agreement.id}/move`),
+          item.request().method() === 'POST' && item.url().includes(`/files/${agreement.id}/move`),
       );
       await nodeAction(page, renamed).click();
       await page.getByRole('menuitem', { name: /move/i }).click();
       const moveDialog = page.getByRole('dialog', { name: /move/i });
-      await moveDialog.getByRole('option', { name: destination.name, exact: true }).click();
+      await moveDialog.getByRole('button', { name: destination.name, exact: true }).click();
       await moveDialog.getByRole('button', { name: /move|confirm/i }).click();
       expect((await moved).ok()).toBe(true);
       await expect(page.getByRole('link', { name: renamed, exact: true })).toHaveCount(0);
@@ -616,7 +862,7 @@ test.describe('P6-T3 required journeys', () => {
       anonymous.on('response', inspectPublicResponse);
       const publicPage = await anonymous.newPage();
       const resolved = publicPage.waitForResponse((response) =>
-        response.url().includes('/v1/public/'),
+        response.url().includes('/v1/public-share/'),
       );
       try {
         await publicPage.evaluate((targetUrl) => {
@@ -653,7 +899,7 @@ test.describe('P6-T3 required journeys', () => {
 
       await revokeShare(ownerPage, share, 'public link');
       const revoked = publicPage.waitForResponse((response) =>
-        response.url().includes('/v1/public/'),
+        response.url().includes('/v1/public-share/'),
       );
       await publicPage.reload();
       expect([401, 404, 410]).toContain((await revoked).status());

@@ -139,7 +139,7 @@ export class SharesService {
         revokedAt: null,
       },
     });
-    if (existing) throw new ConflictException('An active share already exists.');
+    if (existing) throw activeShareConflict();
     const recipient = await this.prisma.userProfile.findUnique({ where: { email } });
     let share: ShareRecord;
     try {
