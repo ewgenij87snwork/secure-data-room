@@ -20,7 +20,7 @@
     "typecheck:tools": "tsc -p tsconfig.json --noEmit",
     "test": "pnpm test:run",
     "test:run": "pnpm workspace:prepare && pnpm test:scripts && pnpm test:run:workspaces",
-    "test:scripts": "node --test scripts/*.test.mjs",
+    "test:scripts": "tsx --test scripts/*.test.mjs scripts/*.test.ts",
     "test:run:workspaces": "pnpm --filter @data-room/contracts test:run && pnpm --filter @data-room/api test:run && pnpm --filter @data-room/web test:run",
     "contracts:check": "pnpm --filter @data-room/contracts build && pnpm --filter @data-room/contracts test:run && pnpm --filter @data-room/contracts typecheck",
     "prisma:generate": "prisma generate",
