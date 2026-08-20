@@ -209,6 +209,18 @@ pnpm verify
 the focused checks above. Database integration tests require the configured disposable database;
 deployed E2E requires P7 URLs and credentials. Neither is represented as completed here.
 
+Local Playwright journeys use `http://127.0.0.1:5173` for Web and
+`http://127.0.0.1:3000` for API. After sourcing the ignored local environment and preparing the
+three distinct owner, viewer, and unrelated storage states required by `tests/e2e/global-setup.js`,
+set a unique `E2E_RUN_ID`, then run `pnpm e2e:local`; Playwright starts or reuses both development
+servers. Capture storage state separately for local and production because browser local storage is
+origin-scoped. `pnpm e2e:list` remains a server-free discovery gate. The local Supabase redirect
+allowlist and `WEB_ORIGINS` must contain the exact `127.0.0.1:5173` origin used by this mode.
+
+After deploying both projects from one commit, run
+`pnpm deployment:sha:check -- --web-url <web-origin> --api-url <api-origin>`. It compares the public
+Web build marker with `/v1/health/version` and fails if either value is missing or differs.
+
 ## Deployment and shutdown
 
 P7 will deploy the web and API as separate Vercel projects from one commit SHA, with Supabase Auth,
