@@ -114,9 +114,22 @@ describe('DataRoomRoute', () => {
     expect(screen.queryByRole('button', { name: 'New folder' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Actions for Contracts/ })).not.toBeInTheDocument();
   });
+
+  it.each([
+    ['owner with uploads enabled', { accessRole: 'OWNER' as const, kind: 'FOLDER' as const }, { uploadsEnabled: true, maintenanceMode: false }, true],
+    ['viewer with uploads enabled', { accessRole: 'VIEWER' as const, kind: 'FOLDER' as const }, { uploadsEnabled: true, maintenanceMode: false }, false],
+    ['owner during maintenance', { accessRole: 'OWNER' as const, kind: 'FOLDER' as const }, { uploadsEnabled: true, maintenanceMode: true }, false],
+    ['owner on a file route', { accessRole: 'OWNER' as const, kind: 'FILE' as const }, { uploadsEnabled: true, maintenanceMode: false }, false],
+  ])('%s shows upload controls only when the mounted route permits them', async (_name, nodeOverrides, runtime, visible) => {
+    const current = node({ id: rootId, ...nodeOverrides });
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => routeResponse(input, current, [], { ...bootstrap, runtime: { ...bootstrap.runtime, ...runtime } })));
+    await renderRoute(current, { ...bootstrap, runtime: { ...bootstrap.runtime, ...runtime } });
+    if (visible) expect(await screen.findByLabelText('Choose PDF files')).toBeVisible();
+    else expect(screen.queryByLabelText('Choose PDF files')).not.toBeInTheDocument();
+  });
 });
 
-async function renderRoute(): Promise<ReturnType<typeof render>> {
+async function renderRoute(current = node({ id: rootId, parentId: null, name: 'Due diligence' }), routeBootstrap = bootstrap): Promise<ReturnType<typeof render>> {
   const { DataRoomRoute } = await import('./data-room-route.js');
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -126,7 +139,7 @@ async function renderRoute(): Promise<ReturnType<typeof render>> {
       <AuthContext.Provider value={authenticated}>
         <MemoryRouter initialEntries={[`/workspace/${rootId}`]}>
           <Routes>
-            <Route element={<Outlet context={{ bootstrap }} />}>
+            <Route element={<Outlet context={{ bootstrap: routeBootstrap }} />}>
               <Route path="/workspace/:nodeId" element={<DataRoomRoute />} />
             </Route>
           </Routes>
@@ -140,6 +153,7 @@ function routeResponse(
   input: RequestInfo | URL,
   current: NodeSummary,
   children: NodeSummary[],
+  responseBootstrap: BootstrapResponse = bootstrap,
 ): Promise<Response> {
   const url = requestUrl(input);
   if (url.pathname.endsWith(`/nodes/${rootId}/breadcrumbs`)) {

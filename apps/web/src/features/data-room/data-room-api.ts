@@ -1,6 +1,10 @@
 import {
   createFolderRequestSchema,
   deleteImpactSchema,
+  finalizeUploadRequestSchema,
+  finalizeUploadResponseSchema,
+  prepareUploadRequestSchema,
+  prepareUploadResponseSchema,
   listNodeChildrenResponseSchema,
   nodeBreadcrumbsResponseSchema,
   nodeSummarySchema,
@@ -11,6 +15,9 @@ import {
   type NodeBreadcrumbsResponse,
   type NodeSummary,
   type RenameNodeRequest,
+  type PrepareUploadRequest,
+  type PreparedUpload,
+  type FinalizeUploadResponse,
 } from '@data-room/contracts';
 import { apiRequest } from '../../lib/api-client.js';
 
@@ -76,4 +83,33 @@ export async function deleteNode(accessToken: string, nodeId: string): Promise<D
     accessToken,
   });
   return deleteImpactSchema.parse(response);
+}
+
+export async function prepareUploads(
+  accessToken: string,
+  input: PrepareUploadRequest,
+): Promise<readonly PreparedUpload[]> {
+  const response = await apiRequest<unknown>('/uploads/prepare', {
+    method: 'POST',
+    accessToken,
+    body: JSON.stringify(prepareUploadRequestSchema.parse(input)),
+  });
+  return prepareUploadResponseSchema.parse(response).uploads;
+}
+
+export async function finalizeUpload(
+  accessToken: string,
+  sessionId: string,
+  clientId: string,
+): Promise<FinalizeUploadResponse> {
+  const response = await apiRequest<unknown>(`/uploads/${sessionId}/finalize`, {
+    method: 'POST',
+    accessToken,
+    body: JSON.stringify(finalizeUploadRequestSchema.parse({ clientId })),
+  });
+  return finalizeUploadResponseSchema.parse(response);
+}
+
+export async function cancelUpload(accessToken: string, sessionId: string): Promise<void> {
+  await apiRequest<void>(`/uploads/${sessionId}`, { method: 'DELETE', accessToken });
 }

@@ -15,16 +15,24 @@ import { WorkspaceShell } from './components/workspace-shell.js';
 import { WorkspaceSidebar } from './components/workspace-sidebar.js';
 import type { DataRoomOutletContext } from './data-room-context.js';
 import { useNode, useNodeBreadcrumbs, useNodeChildren } from './data-room-queries.js';
+import { UploadDropzone } from '../uploads/components/upload-dropzone.js';
+import { useOptionalUploadQueue } from '../uploads/use-upload-queue.js';
 
 interface SelectedNode {
   node: NodeSummary;
   returnFocusElement: HTMLElement | null;
 }
 
+export function shouldShowUploadDropzone(input: { canManage: boolean; uploadsEnabled: boolean; nodeKind: string | undefined }): boolean {
+  return input.canManage && input.uploadsEnabled && input.nodeKind === 'FOLDER';
+}
+
 export function DataRoomRoute(): React.JSX.Element {
   const { nodeId } = useParams();
   const { bootstrap } = useOutletContext<DataRoomOutletContext>();
   const auth = useAuth();
+  const queue = useOptionalUploadQueue();
+  const addFiles = queue?.addFiles ?? (async () => undefined);
   const resolvedNodeId = nodeId ?? bootstrap.room.rootNodeId;
   const nodeQuery = useNode(resolvedNodeId);
   const breadcrumbsQuery = useNodeBreadcrumbs(resolvedNodeId);
@@ -36,6 +44,7 @@ export function DataRoomRoute(): React.JSX.Element {
   const accountLabel = bootstrap.user.displayName ?? bootstrap.user.email;
   const currentNode = nodeQuery.data;
   const canManage = currentNode?.accessRole === 'OWNER' && !bootstrap.runtime.maintenanceMode;
+    const canUpload = shouldShowUploadDropzone({ canManage, uploadsEnabled: bootstrap.runtime.uploadsEnabled, nodeKind: currentNode?.kind });
   const children = childrenQuery.data?.pages.flatMap((page) => page.items) ?? [];
 
   const shell = (content: React.ReactNode, context?: React.ReactNode): React.JSX.Element => (
@@ -123,6 +132,9 @@ export function DataRoomRoute(): React.JSX.Element {
             </p>
           </section>
         )}
+        {canUpload ? (
+          <UploadDropzone disabled={!auth.accessToken} onFilesSelected={(files) => void addFiles(currentNode.id, files)} />
+        ) : null}
       </div>
 
       {isFolder && canManage && createReturnFocus ? (

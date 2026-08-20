@@ -4,6 +4,7 @@ import { bootstrapResponseSchema } from '@data-room/contracts';
 import { apiRequest } from '../lib/api-client.js';
 import { ApiClientError } from '../lib/api-error.js';
 import { useAuth } from '../features/auth/auth-context.js';
+import { UploadQueue } from '../features/uploads/components/upload-queue.js';
 
 function AuthState({ title, message }: { title: string; message: string }): React.JSX.Element {
   return (
@@ -83,6 +84,7 @@ export function ProtectedRoute(): React.JSX.Element {
           Maintenance mode is active. Read-only access remains available.
         </div>
       ) : null}
+      <UploadQueue />
       <Outlet context={{ bootstrap: bootstrap.data }} />
     </>
   );
