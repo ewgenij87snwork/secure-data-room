@@ -97,7 +97,14 @@ describe('shared contracts', () => {
 
     expect(preparedUploadSchema.parse(preparedUpload)).toEqual(preparedUpload);
     expect(() => {
-      const { bucketName: _bucketName, ...withoutBucketName } = preparedUpload;
+      const withoutBucketName = {
+        clientId: preparedUpload.clientId,
+        sessionId: preparedUpload.sessionId,
+        storageKey: preparedUpload.storageKey,
+        tusEndpoint: preparedUpload.tusEndpoint,
+        uploadToken: preparedUpload.uploadToken,
+        expiresAt: preparedUpload.expiresAt,
+      };
       preparedUploadSchema.parse(withoutBucketName);
     }).toThrow();
   });
