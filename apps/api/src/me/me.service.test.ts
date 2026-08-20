@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import type { BootstrapResponse } from '@data-room/contracts';
 import { authenticatedPrincipal } from '../auth/principal.js';
 import { MeService, type BootstrapDatabase, type BootstrapTransaction } from './me.service.js';
 
@@ -64,10 +65,10 @@ function createHarness(options: HarnessOptions = {}) {
   let transactionAttempt = 0;
   const transactionOptions: { isolationLevel: 'Serializable' }[] = [];
   const transaction = vi.fn(
-    <T>(
-      callback: (client: BootstrapTransaction) => Promise<T>,
+    (
+      callback: (client: BootstrapTransaction) => Promise<BootstrapResponse>,
       transactionConfig: { isolationLevel: 'Serializable' },
-    ): Promise<T> => {
+    ): Promise<BootstrapResponse> => {
       transactionOptions.push(transactionConfig);
       const failureCode = options.transactionFailures?.[transactionAttempt];
       transactionAttempt += 1;

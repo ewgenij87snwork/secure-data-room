@@ -77,10 +77,10 @@ export interface BootstrapTransaction {
 }
 
 export interface BootstrapDatabase {
-  $transaction<T>(
-    callback: (tx: BootstrapTransaction) => Promise<T>,
+  $transaction(
+    callback: (tx: BootstrapTransaction) => Promise<BootstrapResponse>,
     options: { isolationLevel: 'Serializable' },
-  ): Promise<T>;
+  ): Promise<BootstrapResponse>;
 }
 
 function registrationClosed(): ForbiddenException {
