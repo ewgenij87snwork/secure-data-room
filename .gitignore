@@ -14,4 +14,5 @@ test-results/
 .worktrees/
 /shared
 /docs/
+/prompts/
 apps/api/src/generated/prisma/
