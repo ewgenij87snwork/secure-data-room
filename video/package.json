@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "scripts": {
     "studio": "remotion studio src/index.ts",
-    "render": "remotion render src/index.ts SdrHero out/secure-data-room-remotion.mp4 --codec=h264 --crf=18",
-    "render:gif": "remotion render src/index.ts SdrHero out/secure-data-room-remotion.gif --codec=gif --every-nth-frame=2",
+    "render": "remotion render src/index.ts SdrHero out/secure-data-room-demo-master.mp4 --codec=h264 --crf=14",
+    "render:gif": "remotion render src/index.ts SdrHero out/secure-data-room-demo.gif --codec=gif --every-nth-frame=3",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

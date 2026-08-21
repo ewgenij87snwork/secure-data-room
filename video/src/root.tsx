@@ -7,9 +7,9 @@ export function RemotionRoot(): JSX.Element {
     <Composition
       id="SdrHero"
       component={SdrHero}
-      durationInFrames={450}
+      durationInFrames={900}
       fps={30}
-      width={1920}
+      width={1440}
       height={1080}
     />
   );

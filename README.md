@@ -17,7 +17,7 @@
 </p>
 
 <p align="center">
-  <a href="assets/readme/secure-data-room-playwright.gif">Open the browser-evidence cut</a> ·
+  <a href="assets/readme/secure-data-room-demo-master.mp4">Open the 1440×1080 master walkthrough</a> ·
   <a href="video/README.md">See how the demo was produced</a>
 </p>
 
@@ -32,7 +32,7 @@ The Web and API expose their build identity and are promoted from one verified c
 5. Open the shared scope in another browser to confirm the read-only boundary.
 6. Revoke access from the same Share dialog and verify that the link stops resolving.
 
-The 15-second hero uses real application captures from an automated browser walkthrough, then applies a deterministic Remotion edit. The separate evidence cut keeps the underlying browser states easy to inspect.
+The 30-second hero uses real application captures from an automated browser walkthrough, then applies a deterministic Remotion edit. It preserves the complete cause-and-effect flow: create a folder, add two PDFs, watch both uploads, grant verified read-only access, hand off the invitation, and review the shared document as the recipient. The linked master keeps every interface label readable at 1440×1080.
 
 ## Why this MVP is deliberate
 
