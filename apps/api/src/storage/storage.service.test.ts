@@ -1,7 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
-import { SupabaseStorageService } from './supabase-storage.service.js';
+import { isPartialContentResponse, SupabaseStorageService } from './supabase-storage.service.js';
 
 describe('SupabaseStorageService', () => {
+  it('accepts only successful partial-content responses', () => {
+    expect(isPartialContentResponse({ ok: true, status: 206 })).toBe(true);
+    expect(isPartialContentResponse({ ok: false, status: 206 })).toBe(false);
+    expect(isPartialContentResponse({ ok: true, status: 200 })).toBe(false);
+    expect(isPartialContentResponse({})).toBe(false);
+  });
+
   it('removes objects in batches of at most 100', async () => {
     const remove = vi.fn().mockResolvedValue({ error: null });
     const service = new SupabaseStorageService({ storage: { from: () => ({ remove }) } } as never, {

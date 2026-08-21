@@ -10,7 +10,15 @@ type StorageConfig = Readonly<{
   SUPABASE_SERVICE_ROLE_KEY?: string;
 }>;
 
-type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
+type FetchResponse = Readonly<{
+  arrayBuffer(): Promise<ArrayBuffer>;
+}>;
+
+type FetchLike = (input: string, init?: RequestInit) => Promise<FetchResponse>;
+
+export function isPartialContentResponse(response: object): boolean {
+  return Reflect.get(response, 'ok') === true && Reflect.get(response, 'status') === 206;
+}
 
 @Injectable()
 export class SupabaseStorageService extends StorageService {
@@ -70,7 +78,7 @@ export class SupabaseStorageService extends StorageService {
           : {}),
       },
     });
-    if (!response.ok || response.status !== 206) throw new Error('Storage read failed.');
+    if (!isPartialContentResponse(response)) throw new Error('Storage read failed.');
     return new Uint8Array(await response.arrayBuffer()).slice(0, byteCount);
   }
 
