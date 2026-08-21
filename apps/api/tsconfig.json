@@ -11,8 +11,7 @@
     "outDir": "dist",
     "rootDir": "src",
     "isolatedModules": false,
-    "allowSyntheticDefaultImports": true,
-    "esModuleInterop": true
+    "allowSyntheticDefaultImports": true
   },
   "include": ["src/**/*.ts", "test/**/*.ts"],
   "exclude": ["node_modules", "dist"]

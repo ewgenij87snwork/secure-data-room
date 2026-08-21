@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { Logger, type INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import helmet from 'helmet';
+import * as helmet from 'helmet';
 import { AppModule } from './app.module.js';
 import { getAllowedOrigins, getEnv } from './config/env.js';
 
@@ -31,7 +31,7 @@ export const apiHelmetOptions = {
 
 export function configureHttpSecurity(app: INestApplication, allowedOrigins: string[]): void {
   app.enableShutdownHooks(['SIGTERM', 'SIGINT']);
-  app.use(helmet(apiHelmetOptions));
+  app.use(helmet.default(apiHelmetOptions));
   app.enableCors({
     origin: allowedOrigins,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
