@@ -1,4 +1,5 @@
 import 'reflect-metadata';
+import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Logger, type INestApplication } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
@@ -77,6 +78,44 @@ export async function bootstrap(
   }
 }
 
-if (process.env.NODE_ENV !== 'test') {
+type ServerlessHandler = (
+  request: IncomingMessage,
+  response: ServerResponse,
+) => void | Promise<void>;
+
+export function createServerlessHandler(
+  createApplication: () => Promise<INestApplication> = createApp,
+): ServerlessHandler {
+  let handlerPromise: Promise<ServerlessHandler> | undefined;
+
+  return async (request, response) => {
+    handlerPromise ??= createApplication()
+      .then((app) => {
+        const handler: unknown = app.getHttpAdapter().getInstance();
+        if (typeof handler !== 'function') {
+          throw new TypeError('Nest HTTP adapter does not expose a request handler.');
+        }
+        return handler as ServerlessHandler;
+      })
+      .catch((error: unknown) => {
+        handlerPromise = undefined;
+        throw error;
+      });
+
+    const handler = await handlerPromise;
+    return handler(request, response);
+  };
+}
+
+export function shouldStartStandalone(
+  env: Partial<Record<'NODE_ENV' | 'VERCEL', string | undefined>> = process.env,
+): boolean {
+  return env.NODE_ENV !== 'test' && env.VERCEL !== '1';
+}
+
+const serverlessHandler = createServerlessHandler();
+export default serverlessHandler;
+
+if (shouldStartStandalone()) {
   void bootstrap();
 }

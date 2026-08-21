@@ -4,7 +4,9 @@ import {
   apiHelmetOptions,
   bootstrap,
   configureHttpSecurity,
+  createServerlessHandler,
   resolveHelmetFactory,
+  shouldStartStandalone,
 } from './main.js';
 
 describe('API bootstrap security', () => {
@@ -68,5 +70,30 @@ describe('API bootstrap security', () => {
 
     process.exitCode = previousExitCode;
     error.mockRestore();
+  });
+
+  it('initializes the serverless HTTP handler once and reuses it across requests', async () => {
+    const httpHandler = vi.fn();
+    const createApplication = vi.fn().mockResolvedValue({
+      getHttpAdapter: () => ({ getInstance: () => httpHandler }),
+    });
+    const handler = createServerlessHandler(createApplication as never);
+    const firstRequest = {};
+    const firstResponse = {};
+    const secondRequest = {};
+    const secondResponse = {};
+
+    await handler(firstRequest as never, firstResponse as never);
+    await handler(secondRequest as never, secondResponse as never);
+
+    expect(createApplication).toHaveBeenCalledOnce();
+    expect(httpHandler).toHaveBeenNthCalledWith(1, firstRequest, firstResponse);
+    expect(httpHandler).toHaveBeenNthCalledWith(2, secondRequest, secondResponse);
+  });
+
+  it('does not start a standalone listener inside tests or Vercel', () => {
+    expect(shouldStartStandalone({ NODE_ENV: 'test' })).toBe(false);
+    expect(shouldStartStandalone({ NODE_ENV: 'production', VERCEL: '1' })).toBe(false);
+    expect(shouldStartStandalone({ NODE_ENV: 'production' })).toBe(true);
   });
 });
