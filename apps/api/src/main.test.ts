@@ -1,8 +1,21 @@
 import { Logger } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
-import { apiHelmetOptions, configureHttpSecurity, bootstrap } from './main.js';
+import {
+  apiHelmetOptions,
+  bootstrap,
+  configureHttpSecurity,
+  resolveHelmetFactory,
+} from './main.js';
 
 describe('API bootstrap security', () => {
+  it('normalizes callable and namespace-shaped Helmet exports', () => {
+    const middleware = vi.fn();
+    const factory = vi.fn(() => middleware);
+
+    expect(resolveHelmetFactory(factory)(apiHelmetOptions)).toBe(middleware);
+    expect(resolveHelmetFactory({ default: factory })(apiHelmetOptions)).toBe(middleware);
+  });
+
   it('uses an exact CORS policy and registers graceful shutdown hooks', () => {
     const app = {
       enableShutdownHooks: vi.fn(),
