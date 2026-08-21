@@ -48,8 +48,9 @@ export function PublicShareRoute(): React.JSX.Element {
         <NodeBrowser
           nodes={children.data?.pages.flatMap((page) => page.items) ?? []}
           canManage={false}
-          isLoading={children.isLoading}
+          isLoading={children.isLoading || !children.isSuccess}
           isError={children.isError}
+          onRetry={() => void children.refetch()}
           hasNextPage={children.hasNextPage}
           isLoadingMore={children.isFetchingNextPage}
           onLoadMore={() => void children.fetchNextPage()}

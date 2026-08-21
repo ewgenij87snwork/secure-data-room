@@ -99,6 +99,9 @@ export function usePublicChildren(token: string | null, nodeId: string, enabled:
   return useInfiniteQuery({
     queryKey: [...tokenKeys.public, generation, 'children', nodeId],
     enabled: Boolean(token && enabled),
+    staleTime: 0,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: true,
     queryFn: ({ pageParam }) => readPublicChildren(token!, nodeId, pageParam),
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (page) => page.pageInfo.nextCursor ?? undefined,

@@ -1,10 +1,18 @@
 import { render, screen } from '@testing-library/react';
 import { StrictMode } from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
-import { PublicPdf } from './public-share-route.js';
+import { PublicPdf, PublicShareRoute } from './public-share-route.js';
 
 const viewUrl = vi.hoisted(() => vi.fn());
+const usePublicShare = vi.hoisted(() => vi.fn());
+const usePublicChildren = vi.hoisted(() => vi.fn());
 vi.mock('./api.js', () => ({ readPublicFileViewUrl: viewUrl }));
+vi.mock('./queries.js', () => ({ usePublicShare, usePublicChildren }));
+vi.mock('../../lib/public-token.js', () => ({
+  capturePublicShareToken: () => 'share-token',
+  clearPublicShareToken: vi.fn(),
+}));
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -45,5 +53,40 @@ describe('PublicPdf request ordering', () => {
       'href',
       'https://cdn.test/b.pdf',
     );
+  });
+});
+
+describe('PublicShareRoute folder loading state', () => {
+  it('does not present an unconfirmed public folder as empty', () => {
+    usePublicShare.mockReturnValue({
+      data: {
+        id: '22222222-2222-4222-8222-222222222222',
+        kind: 'FOLDER',
+        name: 'Shared folder',
+      },
+      isLoading: false,
+      isError: false,
+    });
+    usePublicChildren.mockReturnValue({
+      data: undefined,
+      isLoading: false,
+      isSuccess: false,
+      isError: false,
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+      refetch: vi.fn(),
+    });
+
+    render(
+      <MemoryRouter>
+        <PublicShareRoute />
+      </MemoryRouter>,
+    );
+
+    expect(screen.getByText('Loading folder contents…')).toBeInTheDocument();
+    expect(
+      screen.queryByText('The owner has not added anything here yet.'),
+    ).not.toBeInTheDocument();
   });
 });
