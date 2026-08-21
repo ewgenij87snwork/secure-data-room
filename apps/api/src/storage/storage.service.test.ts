@@ -9,6 +9,21 @@ describe('SupabaseStorageService', () => {
     expect(isPartialContentResponse({})).toBe(false);
   });
 
+  it('fails closed when a partial-content response has no readable body', async () => {
+    const service = new SupabaseStorageService(
+      { storage: { from: () => ({}) } } as never,
+      {
+        SUPABASE_URL: 'https://project.supabase.co',
+        STORAGE_BUCKET: 'data-room-pdfs',
+      },
+      vi.fn().mockResolvedValue({ ok: true, status: 206 }) as never,
+    );
+
+    await expect(service.readPrefix('rooms/r/objects/o', 5)).rejects.toThrow(
+      'Storage read failed.',
+    );
+  });
+
   it('removes objects in batches of at most 100', async () => {
     const remove = vi.fn().mockResolvedValue({ error: null });
     const service = new SupabaseStorageService({ storage: { from: () => ({ remove }) } } as never, {

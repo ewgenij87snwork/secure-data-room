@@ -10,14 +10,14 @@ type StorageConfig = Readonly<{
   SUPABASE_SERVICE_ROLE_KEY?: string;
 }>;
 
-type FetchResponse = Readonly<{
-  arrayBuffer(): Promise<ArrayBuffer>;
-}>;
+type FetchLike = (input: string, init?: RequestInit) => Promise<object>;
 
-type FetchLike = (input: string, init?: RequestInit) => Promise<FetchResponse>;
+function responseField(response: object, field: string): unknown {
+  return (response as Readonly<Record<string, unknown>>)[field];
+}
 
 export function isPartialContentResponse(response: object): boolean {
-  return Reflect.get(response, 'ok') === true && Reflect.get(response, 'status') === 206;
+  return responseField(response, 'ok') === true && responseField(response, 'status') === 206;
 }
 
 @Injectable()
@@ -78,8 +78,13 @@ export class SupabaseStorageService extends StorageService {
           : {}),
       },
     });
-    if (!isPartialContentResponse(response)) throw new Error('Storage read failed.');
-    return new Uint8Array(await response.arrayBuffer()).slice(0, byteCount);
+    const readBody = responseField(response, 'arrayBuffer');
+    if (!isPartialContentResponse(response) || typeof readBody !== 'function') {
+      throw new Error('Storage read failed.');
+    }
+    const body: unknown = await (readBody as () => Promise<unknown>).call(response);
+    if (!(body instanceof ArrayBuffer)) throw new Error('Storage read failed.');
+    return new Uint8Array(body).slice(0, byteCount);
   }
 
   async createSignedReadUrl(storageKey: string, ttlSeconds: number): Promise<string> {
