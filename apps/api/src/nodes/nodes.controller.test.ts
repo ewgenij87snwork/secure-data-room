@@ -53,6 +53,7 @@ const impactResponse: DeleteImpact = {
 };
 const viewUrlResponse = {
   url: 'https://storage.example/signed',
+  downloadUrl: 'https://storage.example/signed-download',
   expiresAt: '2026-01-01T00:01:00.000Z',
 };
 

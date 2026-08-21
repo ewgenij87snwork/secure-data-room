@@ -25,8 +25,8 @@ class LazyStorageService extends StorageService {
   readPrefix(storageKey: string, byteCount: number) {
     return this.service.readPrefix(storageKey, byteCount);
   }
-  createSignedReadUrl(storageKey: string, ttlSeconds: number) {
-    return this.service.createSignedReadUrl(storageKey, ttlSeconds);
+  createSignedReadUrl(storageKey: string, ttlSeconds: number, downloadName?: string) {
+    return this.service.createSignedReadUrl(storageKey, ttlSeconds, downloadName);
   }
   remove(storageKeys: readonly string[]) {
     return this.service.remove(storageKeys);

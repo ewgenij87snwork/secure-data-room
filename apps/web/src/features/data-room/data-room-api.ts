@@ -23,7 +23,12 @@ import {
 import { z } from 'zod';
 import { apiRequest } from '../../lib/api-client.js';
 
-const viewUrlResponseSchema = z.object({ url: z.string().url(), expiresAt: z.string().datetime() });
+const viewUrlResponseSchema = z.object({
+  url: z.string().url(),
+  downloadUrl: z.string().url(),
+  expiresAt: z.string().datetime(),
+});
+export type FileViewUrl = z.infer<typeof viewUrlResponseSchema>;
 type MoveFileRequest = z.infer<typeof moveFileRequestSchema>;
 
 export async function readNode(accessToken: string, nodeId: string): Promise<NodeSummary> {
@@ -103,10 +108,7 @@ export async function moveNode(
   return nodeSummarySchema.parse(response);
 }
 
-export async function readFileViewUrl(
-  accessToken: string,
-  nodeId: string,
-): Promise<{ url: string; expiresAt: string }> {
+export async function readFileViewUrl(accessToken: string, nodeId: string): Promise<FileViewUrl> {
   const response = await apiRequest<unknown>(`/files/${nodeId}/view-url`, {
     method: 'POST',
     accessToken,

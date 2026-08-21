@@ -26,7 +26,11 @@ import { toNodeSummary, type NodeRow } from './node-summary.js';
 import { StorageService } from '../storage/storage.service.js';
 
 export type MoveFileRequest = z.infer<typeof moveFileRequestSchema>;
-export type ViewUrlResponse = Readonly<{ url: string; expiresAt: string }>;
+export type ViewUrlResponse = Readonly<{
+  url: string;
+  downloadUrl: string;
+  expiresAt: string;
+}>;
 
 interface ParentProof {
   dataRoomId: string;
@@ -211,12 +215,20 @@ export class NodesService {
     }
     const ttlSeconds = 60;
     let url: string;
+    let downloadUrl: string;
     try {
-      url = await storage.createSignedReadUrl(node.storageKey, ttlSeconds);
+      [url, downloadUrl] = await Promise.all([
+        storage.createSignedReadUrl(node.storageKey, ttlSeconds),
+        storage.createSignedReadUrl(node.storageKey, ttlSeconds, node.name),
+      ]);
     } catch {
       throw persistenceFailure('Viewing failed.');
     }
-    return { url, expiresAt: new Date(Date.now() + ttlSeconds * 1000).toISOString() };
+    return {
+      url,
+      downloadUrl,
+      expiresAt: new Date(Date.now() + ttlSeconds * 1000).toISOString(),
+    };
   }
 
   private async createInTransaction(

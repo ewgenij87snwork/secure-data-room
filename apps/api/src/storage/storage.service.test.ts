@@ -88,6 +88,32 @@ describe('SupabaseStorageService', () => {
     });
   });
 
+  it('creates distinct inline and forced-download signed URLs', async () => {
+    const createSignedUrl = vi
+      .fn()
+      .mockResolvedValueOnce({ data: { signedUrl: 'https://storage.test/inline' }, error: null })
+      .mockResolvedValueOnce({ data: { signedUrl: 'https://storage.test/download' }, error: null });
+    const service = new SupabaseStorageService(
+      { storage: { from: () => ({ createSignedUrl }) } } as never,
+      {
+        SUPABASE_URL: 'https://project.supabase.co',
+        STORAGE_BUCKET: 'data-room-pdfs',
+      },
+    );
+
+    await expect(service.createSignedReadUrl('rooms/r/file', 60)).resolves.toBe(
+      'https://storage.test/inline',
+    );
+    await expect(
+      service.createSignedReadUrl('rooms/r/file', 60, 'Board minutes.pdf'),
+    ).resolves.toBe('https://storage.test/download');
+
+    expect(createSignedUrl).toHaveBeenNthCalledWith(1, 'rooms/r/file', 60);
+    expect(createSignedUrl).toHaveBeenNthCalledWith(2, 'rooms/r/file', 60, {
+      download: 'Board minutes.pdf',
+    });
+  });
+
   it('requests and retains only the bounded prefix', async () => {
     const serviceRoleKey = 'fake-service-role-key-for-tests';
     const fetchImpl = vi

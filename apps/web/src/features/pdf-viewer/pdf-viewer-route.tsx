@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useAuth } from '../auth/auth-context.js';
 import { ApiClientError } from '../../lib/api-error.js';
-import { readFileViewUrl } from '../data-room/data-room-api.js';
+import { readFileViewUrl, type FileViewUrl } from '../data-room/data-room-api.js';
 import { useNode } from '../data-room/data-room-queries.js';
 import { EmbeddedPdf } from './components/embedded-pdf.js';
 import { PdfViewerToolbar } from './components/pdf-viewer-toolbar.js';
@@ -12,7 +12,7 @@ export function PdfViewerRoute(): React.JSX.Element {
   const nodeId = useParams().nodeId ?? '';
   const { accessToken } = useAuth();
   const node = useNode(nodeId);
-  const [view, setView] = useState<{ url: string; expiresAt: string } | null>(null);
+  const [view, setView] = useState<FileViewUrl | null>(null);
   const [state, setState] = useState<ViewerStateName>('loading');
   const requestGeneration = useRef(0);
   const load = useCallback(() => {
@@ -46,7 +46,7 @@ export function PdfViewerRoute(): React.JSX.Element {
   }, [view, load]);
   if (node.isLoading || (state === 'loading' && !node.data)) {
     return (
-      <main className="pdf-viewer">
+      <section className="pdf-viewer">
         <PdfViewerToolbar name="Opening document…" onRefresh={load} />
         <section
           className="pdf-viewer__loading-skeleton"
@@ -58,15 +58,15 @@ export function PdfViewerRoute(): React.JSX.Element {
           <div className="content-skeleton content-skeleton--pdf-title" aria-hidden="true" />
           <div className="content-skeleton content-skeleton--pdf-page" aria-hidden="true" />
         </section>
-      </main>
+      </section>
     );
   }
   if (node.isError || !node.data) return <ViewerState state={viewerErrorState(node.error)} />;
   return (
-    <main className="pdf-viewer">
-      <PdfViewerToolbar name={node.data.name} onRefresh={load} />
+    <section className="pdf-viewer">
+      <PdfViewerToolbar name={node.data.name} onRefresh={load} downloadUrl={view?.downloadUrl} />
       {view ? <EmbeddedPdf url={view.url} name={node.data.name} /> : <ViewerState state={state} />}
-    </main>
+    </section>
   );
 }
 

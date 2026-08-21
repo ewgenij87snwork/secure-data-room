@@ -22,6 +22,8 @@ import { useOptionalUploadQueue } from '../uploads/upload-queue-context.js';
 import { shouldShowUploadDropzone } from './data-room-upload-visibility.js';
 import { useOnlineStatus } from '../../lib/online-status-hook.js';
 import { ShareDialog } from '../sharing/components/share-dialog.js';
+import { readFileViewUrl } from './data-room-api.js';
+import { startFileDownload } from '../pdf-viewer/download-file.js';
 
 interface SelectedNode {
   node: NodeSummary;
@@ -167,6 +169,11 @@ export function DataRoomRoute(): React.JSX.Element {
             onDelete={(node, returnFocusElement) => setDeleteTarget({ node, returnFocusElement })}
             onMove={(node, returnFocusElement) => setMoveTarget({ node, returnFocusElement })}
             onShare={(node, returnFocusElement) => setShareTarget({ node, returnFocusElement })}
+            onDownload={async (file) => {
+              if (!auth.accessToken) throw new Error('An authenticated session is required.');
+              const view = await readFileViewUrl(auth.accessToken, file.id);
+              startFileDownload(view.downloadUrl, file.name);
+            }}
           />
         ) : (
           <section className="document-summary" aria-label="Document summary">

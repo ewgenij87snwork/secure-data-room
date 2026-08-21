@@ -26,6 +26,7 @@ describe('PublicPdf request ordering', () => {
   it('renders the current signed URL under StrictMode effect replay', async () => {
     viewUrl.mockResolvedValue({
       url: 'https://cdn.test/current.pdf',
+      downloadUrl: 'https://cdn.test/current-download.pdf',
       expiresAt: '2026-08-20T12:00:00.000Z',
     });
     render(
@@ -33,24 +34,36 @@ describe('PublicPdf request ordering', () => {
         <PublicPdf nodeId="current" token="opaque" name="Current.pdf" />
       </StrictMode>,
     );
-    expect(await screen.findByRole('link', { name: /open the document/i })).toHaveAttribute(
-      'href',
+    expect(await screen.findByLabelText('PDF document: Current.pdf')).toHaveAttribute(
+      'src',
       'https://cdn.test/current.pdf',
+    );
+    expect(screen.getByRole('link', { name: 'Download PDF' })).toHaveAttribute(
+      'href',
+      'https://cdn.test/current-download.pdf',
     );
   });
 
   it('does not let a late A response replace selected file B', async () => {
-    const a = deferred<{ url: string; expiresAt: string }>();
-    const b = deferred<{ url: string; expiresAt: string }>();
+    const a = deferred<{ url: string; downloadUrl: string; expiresAt: string }>();
+    const b = deferred<{ url: string; downloadUrl: string; expiresAt: string }>();
     viewUrl.mockImplementation((_, nodeId: string) => (nodeId === 'a' ? a.promise : b.promise));
     const view = render(<PublicPdf nodeId="a" token="opaque" name="A.pdf" />);
     view.rerender(<PublicPdf nodeId="b" token="opaque" name="B.pdf" />);
-    a.resolve({ url: 'https://cdn.test/a.pdf', expiresAt: '2026-08-20T12:00:00.000Z' });
+    a.resolve({
+      url: 'https://cdn.test/a.pdf',
+      downloadUrl: 'https://cdn.test/a-download.pdf',
+      expiresAt: '2026-08-20T12:00:00.000Z',
+    });
     await Promise.resolve();
-    expect(screen.queryByRole('link', { name: /open the document/i })).not.toBeInTheDocument();
-    b.resolve({ url: 'https://cdn.test/b.pdf', expiresAt: '2026-08-20T12:00:00.000Z' });
-    expect(await screen.findByRole('link', { name: /open the document/i })).toHaveAttribute(
-      'href',
+    expect(screen.queryByLabelText('PDF document: A.pdf')).not.toBeInTheDocument();
+    b.resolve({
+      url: 'https://cdn.test/b.pdf',
+      downloadUrl: 'https://cdn.test/b-download.pdf',
+      expiresAt: '2026-08-20T12:00:00.000Z',
+    });
+    expect(await screen.findByLabelText('PDF document: B.pdf')).toHaveAttribute(
+      'src',
       'https://cdn.test/b.pdf',
     );
   });

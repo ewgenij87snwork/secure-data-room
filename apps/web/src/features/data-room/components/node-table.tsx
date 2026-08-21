@@ -3,6 +3,7 @@ import { AccessStatus } from './access-status.js';
 import { NodeActionsMenu } from './node-actions-menu.js';
 import { NodeName } from './node-name.js';
 import type { NodeItemViewModel } from './node-view-model.js';
+import { NodeDownloadButton } from './node-download-button.js';
 
 export function NodeTable({
   items,
@@ -12,6 +13,7 @@ export function NodeTable({
   onShare,
   resolveDestination,
   onOpen,
+  onDownload,
 }: Readonly<{
   items: readonly NodeItemViewModel[];
   onRename: (node: NodeSummary, returnFocusElement: HTMLElement | null) => void;
@@ -20,6 +22,7 @@ export function NodeTable({
   onShare?: ((node: NodeSummary, returnFocusElement: HTMLElement | null) => void) | undefined;
   resolveDestination?: ((node: NodeSummary) => string) | undefined;
   onOpen?: ((node: NodeSummary) => void) | undefined;
+  onDownload?: ((node: NodeSummary) => Promise<void>) | undefined;
 }>): React.JSX.Element {
   return (
     <div className="node-table-wrap">
@@ -47,6 +50,7 @@ export function NodeTable({
               </td>
               <td>{item.sizeLabel}</td>
               <td className="node-table__actions">
+                <NodeDownloadButton node={item.node} onDownload={onDownload} />
                 <NodeActionsMenu
                   item={item}
                   onRename={onRename}

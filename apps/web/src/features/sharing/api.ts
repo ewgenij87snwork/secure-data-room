@@ -29,7 +29,11 @@ export type {
 };
 export type PublicShareChildrenResponse = z.infer<typeof publicShareChildrenResponseSchema>;
 export type SharedWithMeItem = SharedWithMeResponse['items'][number];
-const viewUrlResponseSchema = z.object({ url: z.string().url(), expiresAt: z.string().datetime() });
+const viewUrlResponseSchema = z.object({
+  url: z.string().url(),
+  downloadUrl: z.string().url(),
+  expiresAt: z.string().datetime(),
+});
 export type PublicFileViewUrl = z.infer<typeof viewUrlResponseSchema>;
 
 export async function listShares(accessToken: string, nodeId: string): Promise<ListSharesResponse> {

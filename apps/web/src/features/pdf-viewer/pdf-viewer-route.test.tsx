@@ -1,11 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
+import { MemoryRouter, Outlet, Route, Routes, useNavigate } from 'react-router-dom';
+import type { BootstrapResponse } from '@data-room/contracts';
 import { describe, expect, it, vi } from 'vitest';
 import { AuthContext } from '../auth/auth-context.js';
 import { PdfViewerRoute } from './pdf-viewer-route.js';
 import { EmbeddedPdf } from './components/embedded-pdf.js';
 import { ViewerState } from './components/viewer-state.js';
+import { SharedWorkspaceLayout } from '../sharing/shared-workspace-layout.js';
 
 vi.hoisted(() => {
   vi.stubEnv('VITE_API_BASE_URL', 'https://api.example.test/v1/');
@@ -35,17 +37,38 @@ describe('private PDF viewer', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: 'A.pdf' })).toBeVisible());
   });
 
-  it('uses the browser-native object fallback without a copyable URL control', () => {
+  it('uses the CSP-compatible browser PDF frame', () => {
     render(<EmbeddedPdf url="https://storage.example.test/signed" name="Contract.pdf" />);
     expect(screen.getByLabelText('PDF document: Contract.pdf')).toHaveAttribute(
-      'data',
+      'src',
       'https://storage.example.test/signed',
     );
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open the document' })).toHaveAttribute(
-      'href',
-      'https://storage.example.test/signed',
+  });
+
+  it('keeps the authenticated viewer inside the workspace shell with a forced download action', async () => {
+    const fileId = '550e8400-e29b-41d4-a716-446655440001';
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (url.pathname.endsWith(`/nodes/${fileId}`))
+          return Promise.resolve(json(node(fileId, 'A.pdf')));
+        if (url.pathname.endsWith(`/files/${fileId}/view-url`)) {
+          return Promise.resolve(signedUrl('https://storage.example.test/a'));
+        }
+        throw new Error(`Unexpected request: ${url}`);
+      }),
     );
+
+    renderViewer(fileId, fileId);
+
+    expect(await screen.findByRole('link', { name: 'Download PDF' })).toHaveAttribute(
+      'href',
+      'https://storage.example.test/a-download',
+    );
+    expect(screen.getByRole('navigation', { name: 'Workspace' })).toBeVisible();
+    expect(screen.getByText('reviewer@example.com')).toBeVisible();
   });
 
   it('does not let an older URL response overwrite the file after navigation', async () => {
@@ -86,7 +109,7 @@ describe('private PDF viewer', () => {
       expect(screen.queryByLabelText('PDF document: A.pdf')).not.toBeInTheDocument(),
     );
     expect(screen.getByLabelText('PDF document: B.pdf')).toHaveAttribute(
-      'data',
+      'src',
       'https://storage.example.test/b',
     );
   });
@@ -166,15 +189,19 @@ function renderViewer(nodeId: string, otherNodeId: string) {
       <AuthContext.Provider value={auth}>
         <MemoryRouter initialEntries={[`/files/${nodeId}`]}>
           <Routes>
-            <Route
-              path="/files/:nodeId"
-              element={
-                <>
-                  <PdfViewerRoute />
-                  <NavigationButtons otherNodeId={otherNodeId} />
-                </>
-              }
-            />
+            <Route element={<Outlet context={{ bootstrap }} />}>
+              <Route element={<SharedWorkspaceLayout />}>
+                <Route
+                  path="/files/:nodeId"
+                  element={
+                    <>
+                      <PdfViewerRoute />
+                      <NavigationButtons otherNodeId={otherNodeId} />
+                    </>
+                  }
+                />
+              </Route>
+            </Route>
           </Routes>
         </MemoryRouter>
       </AuthContext.Provider>
@@ -218,8 +245,33 @@ function json(body: unknown): Response {
 }
 
 function signedUrl(url: string): Response {
-  return json({ url, expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString() });
+  return json({
+    url,
+    downloadUrl: `${url}-download`,
+    expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(),
+  });
 }
+
+const bootstrap: BootstrapResponse = {
+  user: {
+    id: '550e8400-e29b-41d4-a716-446655440000',
+    email: 'reviewer@example.com',
+    displayName: null,
+  },
+  room: {
+    id: '650e8400-e29b-41d4-a716-446655440000',
+    name: 'Review room',
+    rootNodeId: '750e8400-e29b-41d4-a716-446655440000',
+    createdAt: '2026-08-21T00:00:00.000Z',
+  },
+  runtime: {
+    registrationOpen: true,
+    uploadsEnabled: true,
+    publicLinksEnabled: true,
+    maintenanceMode: false,
+    updatedAt: '2026-08-21T00:00:00.000Z',
+  },
+};
 
 function requestUrl(input: RequestInfo | URL): URL {
   if (typeof input === 'string' || input instanceof URL) return new URL(input);

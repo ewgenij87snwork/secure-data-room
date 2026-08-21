@@ -87,8 +87,14 @@ export class SupabaseStorageService extends StorageService {
     return new Uint8Array(body).slice(0, byteCount);
   }
 
-  async createSignedReadUrl(storageKey: string, ttlSeconds: number): Promise<string> {
-    const result = await this.bucket.createSignedUrl(storageKey, ttlSeconds);
+  async createSignedReadUrl(
+    storageKey: string,
+    ttlSeconds: number,
+    downloadName?: string,
+  ): Promise<string> {
+    const result = downloadName
+      ? await this.bucket.createSignedUrl(storageKey, ttlSeconds, { download: downloadName })
+      : await this.bucket.createSignedUrl(storageKey, ttlSeconds);
     if (result.error || !result.data.signedUrl) throw new Error('Storage signing failed.');
     return result.data.signedUrl;
   }

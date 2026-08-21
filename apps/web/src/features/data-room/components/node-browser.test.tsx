@@ -142,6 +142,26 @@ describe('NodeBrowser', () => {
     expect(window.location.pathname).toBe('/');
     expect(window.location.search).toBe('');
   });
+
+  it('offers download for every visible PDF regardless of owner controls', async () => {
+    const onDownload = vi.fn().mockResolvedValue(undefined);
+    render(
+      <MemoryRouter>
+        <NodeBrowser
+          nodes={[file]}
+          canManage={false}
+          onRename={vi.fn()}
+          onDelete={vi.fn()}
+          onDownload={onDownload}
+        />
+      </MemoryRouter>,
+    );
+
+    const downloadButtons = screen.getAllByRole('button', { name: `Download ${file.name}` });
+    expect(downloadButtons).toHaveLength(2);
+    await userEvent.click(downloadButtons[0]!);
+    expect(onDownload).toHaveBeenCalledWith(file);
+  });
 });
 
 function node(overrides: Partial<NodeSummary>): NodeSummary {

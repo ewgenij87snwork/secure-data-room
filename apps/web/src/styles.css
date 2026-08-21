@@ -1380,7 +1380,7 @@ body {
 .pdf-viewer {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  min-height: calc(100dvh - 64px);
   background: hsl(var(--background));
 }
 .pdf-viewer__toolbar {
@@ -1400,10 +1400,16 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.pdf-viewer__actions,
+.public-pdf__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 .pdf-viewer__embed {
   flex: 1;
   width: 100%;
-  min-height: calc(100dvh - 64px);
+  min-height: calc(100dvh - 128px);
   border: 0;
 }
 
@@ -1839,7 +1845,7 @@ body {
 
 .node-table th:last-child,
 .node-table td:last-child {
-  width: 52px;
+  width: 104px;
   padding-right: 0;
   text-align: right;
 }
@@ -1858,7 +1864,11 @@ body {
 }
 
 .node-table__actions {
+  display: flex;
   height: 68px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
 }
 
 .node-name {

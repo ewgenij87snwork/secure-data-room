@@ -1,34 +1,45 @@
 # Secure Data Room
 
-> A production-minded Data Room MVP for organizing and deliberately sharing due-diligence PDFs.
+> Share due-diligence PDFs with deliberate, read-only access.
+>
+> Organize files in folders, upload multiple PDFs, and share only the room, folder, or file a reviewer needs.
 
 [![GitHub](https://img.shields.io/badge/GitHub-ewgenij87snwork-111827?logo=github&logoColor=white)](https://github.com/ewgenij87snwork)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Yevgeniy%20Sorokin-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/yevgeniy-sorokin-829b7b18a/)
 
-## See it live
+**[Open the live demo](https://secure-data-room-web.vercel.app)** · [Check API health](https://secure-data-room-api.vercel.app/v1/health/ready) · [View source](https://github.com/ewgenij87snwork/secure-data-room)
 
-- **Web:** [secure-data-room-web.vercel.app](https://secure-data-room-web.vercel.app)
-- **API health:** [secure-data-room-api.vercel.app/v1/health/ready](https://secure-data-room-api.vercel.app/v1/health/ready)
-- **Repository:** [github.com/ewgenij87snwork/secure-data-room](https://github.com/ewgenij87snwork/secure-data-room)
+<p align="center">
+  <picture>
+    <source media="(prefers-reduced-motion: no-preference)" srcset="assets/readme/secure-data-room-demo.gif">
+    <img src="assets/readme/secure-data-room-demo.jpg" alt="Secure Data Room reviewer tour: private workspace, multi-PDF upload, scoped sharing, and PDF review" width="900">
+  </picture>
+</p>
+
+<p align="center">
+  <a href="assets/readme/secure-data-room-playwright.gif">Open the browser-evidence cut</a> ·
+  <a href="video/README.md">See how the demo was produced</a>
+</p>
 
 The Web and API expose their build identity and are promoted from one verified commit.
 
 ## A two-minute reviewer tour
 
-1. Sign in with Google. A private default Data Room is created for the owner.
-2. Create nested folders and follow breadcrumbs; use the PDF drop zone to upload one or more files.
-3. Open the file menu to rename, move, or delete a document.
-4. Select **Share** on a room or folder. Create a public read-only link, or grant a verified email view-only access.
-5. Open the link in a private window to see the read-only view. Revoke it from the owner’s Share dialog.
+1. Sign in with Google; the application creates a private default Data Room.
+2. Create a folder and upload multiple PDFs with independent progress and validation.
+3. Open a PDF inline, or use the always-visible download fallback.
+4. Share the exact room, folder, or file through a public link or verified recipient email.
+5. Open the shared scope in another browser to confirm the read-only boundary.
+6. Revoke access from the same Share dialog and verify that the link stops resolving.
 
-<p align="center">
-  <picture>
-    <source media="(prefers-reduced-motion: no-preference)" srcset="assets/readme/secure-data-room-demo.gif">
-    <img src="assets/readme/secure-data-room-demo.svg" alt="Secure Data Room reviewer tour: private workspace, upload, and read-only sharing" width="900">
-  </picture>
-</p>
+The 15-second hero uses real application captures from an automated browser walkthrough, then applies a deterministic Remotion edit. The separate evidence cut keeps the underlying browser states easy to inspect.
 
-> The animation is a compact reviewer tour; a static storyboard is used when reduced motion is preferred.
+## Why this MVP is deliberate
+
+- **Private by default:** access changes only through an explicit, visible sharing action.
+- **Server-enforced boundaries:** NestJS resolves every owner, recipient, and public-token permission; the UI is never the authority.
+- **Small but complete scope:** authentication, hierarchy, upload, viewing, sharing, revocation, and failure states form one reviewable end-to-end workflow.
+- **Honest constraints:** search and file versioning remain explicit exclusions instead of partially implemented claims.
 
 ## What is implemented
 
@@ -37,7 +48,7 @@ The Web and API expose their build identity and are promoted from one verified c
 | Google authentication and private owner boundary                             | Implemented       | `apps/api/src/auth/`, `apps/api/src/access-control/`      |
 | Nested folders, breadcrumbs, rename, and move                                | Implemented       | `apps/api/src/nodes/`, `apps/web/src/features/data-room/` |
 | Multi-PDF drag/drop with per-file progress, retry, cancel, and validation    | Implemented       | `apps/web/src/features/uploads/`, `apps/api/src/uploads/` |
-| PDF view and delete flows                                                    | Implemented       | Web node features and API node tests                      |
+| PDF view, direct-download fallback, and delete flows                         | Implemented       | Web node features and API node tests                      |
 | Public-link subtree access and revoke                                        | Implemented       | `apps/api/src/shares/`, public-token tests                |
 | Permissioned read-only sharing and Shared with me                            | Implemented       | Share/access-control services and tests                   |
 | Loading, empty, offline, conflict, quota, gone, revoked, invalid-link states | Implemented       | Web feature tests and stable API error contracts          |
@@ -79,6 +90,7 @@ Source of truth: [`prisma/schema.prisma`](prisma/schema.prisma).
 - Server-side auth checks issuer, audience, expiry, subject, and JWKS signature; protected reads and mutations pass through `AccessPolicyService`.
 - The bucket is private, object keys are random, and public-link secrets are 256-bit random values stored only as SHA-256 digests. Tokens begin in the URL fragment and are removed after capture.
 - Public sharing is read-only and scoped to the selected subtree. Revocation blocks new access; an already-issued signed PDF URL has a disclosed maximum residual TTL of 60 seconds.
+- Every file view exposes a direct download fallback when the browser cannot embed the PDF.
 - PostgreSQL RLS, quotas, runtime kill switches, tombstones, and an idempotent storage cleanup job provide defense in depth.
 - This is a take-home MVP, not a compliance certification. Malware scanning, immutable audit logging, retention/backups, enterprise identity, WAF policy, and incident response remain outside this submission.
 
@@ -129,7 +141,7 @@ pnpm deployment:sha:check -- \
 - One default room per owner keeps the deadline model small; multiple rooms would need an explicit default-room choice.
 - Tombstones and cleanup-job records are the recoverable deadline-build boundary; production needs a reviewed retention and purge policy.
 - Search and file versioning are optional assignment extras and intentionally excluded from this MVP.
-- AI helped with requirement extraction, architecture review, traceability, and prose drafting. The engineer selected the scope, inspected the implementation, made the security decisions, and owns the accepted changes; AI output is not evidence.
+- Codex helped with requirement extraction, implementation, adversarial review, traceability, and documentation. Playwright captured real browser states; Remotion and FFmpeg produced the deterministic reviewer tour. The engineer selected the scope, inspected the implementation, made the security decisions, and owns every accepted change; AI output is not treated as evidence.
 
 ## Creator
 

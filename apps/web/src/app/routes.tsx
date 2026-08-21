@@ -17,10 +17,10 @@ export function AppRoutes(): React.JSX.Element {
       <Route path="/auth/callback" element={<AuthCallbackRoute />} />
       <Route path="/share" element={<PublicShareRoute />} />
       <Route element={<ProtectedRoute />}>
-        <Route path="/files/:nodeId" element={<PdfViewerRoute />} />
         <Route path="/workspace" element={<WorkspaceIndexRoute />} />
         <Route path="/workspace/:nodeId" element={<DataRoomRoute />} />
         <Route element={<SharedWorkspaceLayout />}>
+          <Route path="/files/:nodeId" element={<PdfViewerRoute />} />
           <Route path="/shared" element={<SharedWithMeRoute />} />
           <Route path="/shared/:nodeId" element={<SharedNodeRoute />} />
         </Route>

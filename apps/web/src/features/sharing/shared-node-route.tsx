@@ -2,8 +2,12 @@ import { Link, useParams } from 'react-router-dom';
 import { useSharedChildren, useSharedNode } from './queries.js';
 import { NodeBrowser } from '../data-room/components/node-browser.js';
 import { ReadOnlyBanner } from './components/read-only-banner.js';
+import { useAuth } from '../auth/auth-context.js';
+import { readFileViewUrl } from '../data-room/data-room-api.js';
+import { startFileDownload } from '../pdf-viewer/download-file.js';
 export function SharedNodeRoute(): React.JSX.Element {
   const { nodeId = '' } = useParams();
+  const auth = useAuth();
   const node = useSharedNode(nodeId);
   const folder = node.data?.kind === 'FOLDER';
   const children = useSharedChildren(nodeId, folder);
@@ -49,6 +53,11 @@ export function SharedNodeRoute(): React.JSX.Element {
           resolveDestination={(child) =>
             child.kind === 'FOLDER' ? `/shared/${child.id}` : `/files/${child.id}`
           }
+          onDownload={async (file) => {
+            if (!auth.accessToken) throw new Error('An authenticated session is required.');
+            const view = await readFileViewUrl(auth.accessToken, file.id);
+            startFileDownload(view.downloadUrl, file.name);
+          }}
         />
       ) : (
         <Link className="primary-button" to={`/files/${current.id}`}>

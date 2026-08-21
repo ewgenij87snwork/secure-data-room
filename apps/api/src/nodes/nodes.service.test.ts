@@ -453,7 +453,12 @@ describe('NodesService file operations', () => {
   });
 
   it('issues a 60-second URL only after read policy', async () => {
-    const storage = { createSignedReadUrl: vi.fn().mockResolvedValue('signed-url') };
+    const storage = {
+      createSignedReadUrl: vi
+        .fn()
+        .mockResolvedValueOnce('signed-url')
+        .mockResolvedValueOnce('signed-download-url'),
+    };
     const database = { node: { findUnique: vi.fn().mockResolvedValue(fileRow) } };
     const policy = {
       assertCanReadNode: vi.fn().mockResolvedValue({ ...fileAccess, accessRole: 'VIEWER' }),
@@ -467,9 +472,16 @@ describe('NodesService file operations', () => {
 
     await expect(service.createViewUrl(principal, nodeId)).resolves.toMatchObject({
       url: 'signed-url',
+      downloadUrl: 'signed-download-url',
       expiresAt: expect.any(String) as string,
     });
-    expect(storage.createSignedReadUrl).toHaveBeenCalledWith(fileRow.storageKey, 60);
+    expect(storage.createSignedReadUrl).toHaveBeenNthCalledWith(1, fileRow.storageKey, 60);
+    expect(storage.createSignedReadUrl).toHaveBeenNthCalledWith(
+      2,
+      fileRow.storageKey,
+      60,
+      fileRow.name,
+    );
   });
 
   it('maps a storage signing failure to INTERNAL_ERROR without leaking the provider error', async () => {

@@ -20,6 +20,7 @@ export function NodeBrowser({
   onShare,
   resolveDestination,
   onOpen,
+  onDownload,
 }: Readonly<{
   nodes: readonly NodeSummary[];
   canManage: boolean;
@@ -36,6 +37,7 @@ export function NodeBrowser({
   onShare?: ((node: NodeSummary, returnFocusElement: HTMLElement | null) => void) | undefined;
   resolveDestination?: (node: NodeSummary) => string;
   onOpen?: (node: NodeSummary) => void;
+  onDownload?: (node: NodeSummary) => Promise<void>;
 }>): React.JSX.Element {
   const items = nodes.map((node) => toNodeViewModel(node, canManage));
 
@@ -93,6 +95,7 @@ export function NodeBrowser({
         onShare={onShare}
         resolveDestination={resolveDestination}
         onOpen={onOpen}
+        onDownload={onDownload}
       />
       <NodeCardList
         items={items}
@@ -102,6 +105,7 @@ export function NodeBrowser({
         onShare={onShare}
         resolveDestination={resolveDestination}
         onOpen={onOpen}
+        onDownload={onDownload}
       />
       {hasNextPage ? (
         <button
