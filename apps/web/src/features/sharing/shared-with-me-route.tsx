@@ -5,11 +5,11 @@ export function SharedWithMeRoute(): React.JSX.Element {
   const query = useSharedWithMe();
   const items = query.data?.pages.flatMap((page) => page.items) ?? [];
   return (
-    <main className="sharing-page">
+    <section className="sharing-page">
       <header className="sharing-page__header">
         <div>
           <p className="eyebrow">Workspace</p>
-          <h1>Shared with me</h1>
+          <h1 id="workspace-title">Shared with me</h1>
           <p>View-only materials other people have shared with your account.</p>
         </div>
         <Link className="secondary-button" to="/workspace">
@@ -42,6 +42,6 @@ export function SharedWithMeRoute(): React.JSX.Element {
           {query.isFetchingNextPage ? 'Loading…' : 'Load more'}
         </button>
       ) : null}
-    </main>
+    </section>
   );
 }
