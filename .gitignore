@@ -13,4 +13,5 @@ test-results/
 *.log
 .worktrees/
 /shared
+/docs/
 apps/api/src/generated/prisma/

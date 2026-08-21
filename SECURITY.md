@@ -19,5 +19,5 @@ signed URLs, personal data, or uploaded document contents in a public issue.
 - registration/upload/public-link kill switches;
 - secret scanning and least-privilege environment separation.
 
-The exact residual limitations of the demo—including the lifetime of already issued signed URLs—are
-documented in `docs/execution/SECURITY-AND-ABUSE-MODEL.md`.
+Already issued signed URLs remain valid for at most their 60-second lifetime. The public demo is not
+approved for confidential, regulated, or irreplaceable data.

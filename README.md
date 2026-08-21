@@ -26,8 +26,8 @@ their production smoke evidence is pending P7.
 ## Current implementation and evidence
 
 “Implemented” below means the source and focused tests for the behavior are present in this checkout.
-It does not mean that an external database, blob bucket, or deployment was verified. No final
-`docs/execution/EVIDENCE.md` exists yet, so cloud and final-SHA claims remain explicitly open.
+It does not mean that an external database, blob bucket, or deployment was verified. Production
+smoke evidence and the final matching-SHA receipt remain explicitly open.
 
 | Capability                                                                   | Current state                                         | Evidence in this repository                                             |
 | ---------------------------------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -39,7 +39,7 @@ It does not mean that an external database, blob bucket, or deployment was verif
 | Public-link subtree access and revoke                                        | Implemented; deployed smoke pending                   | `apps/api/src/shares/`, public-token tests, access-policy tests         |
 | Permissioned read-only sharing and Shared with me                            | Implemented; deployed smoke pending                   | share/access-control services and tests                                 |
 | Loading, empty, offline, conflict, quota, gone, revoked, invalid-link states | Implemented in UI/contracts; browser smoke pending    | web feature tests and stable contract errors                            |
-| Responsive and keyboard-accessible flows                                     | Implemented in UI; final accessibility review pending | web components/tests; `docs/execution/FINAL-ACCEPTANCE.md` checklist    |
+| Responsive and keyboard-accessible flows                                     | Implemented in UI; final accessibility review pending | web component tests and required Playwright journeys                    |
 | Frontend/backend deployed at one Git SHA                                     | Not evidenced; pending P7                             | No deployment URLs or final-SHA evidence yet                            |
 | Filename search                                                              | Excluded from this build                              | Optional scope is not implemented or claimed                            |
 | File versioning                                                              | Excluded from this build                              | Optional scope is not implemented or claimed                            |
@@ -147,8 +147,8 @@ claim.
 The MVP does not perform malware scanning, immutable audit logging, retention/backups, enterprise
 identity, or compliance certification. It is production-minded, not safe for real acquisition data
 without those controls and an operational review. Static security scanning is a repository guard, not
-a security certification. Deployment and shutdown controls are documented in
-[`docs/execution/DEPLOYMENT-AND-SHUTDOWN.md`](docs/execution/DEPLOYMENT-AND-SHUTDOWN.md).
+a security certification. Runtime review, lockdown, maintenance, and cleanup controls are exposed by
+the `pnpm ops:*` commands below.
 
 ## Repository map
 
@@ -158,9 +158,7 @@ apps/api/       NestJS application backend
 packages/       Shared Zod contracts and stable error codes
 prisma/         Schema, migration, seed, and database invariants
 tests/e2e/      Playwright journey definitions
-docs/architecture/  Architecture decisions
-docs/execution/     Traceability, acceptance, security, and operations
-docs/ai/            AI assistance and human ownership
+governance/     Machine-checked requirement traceability and progress registry
 ```
 
 ## Clean local setup
@@ -225,8 +223,8 @@ Web build marker with `/v1/health/version` and fails if either value is missing 
 
 P7 will deploy the web and API as separate Vercel projects from one commit SHA, with Supabase Auth,
 PostgreSQL, and private Storage. Migrations run separately; they never run during API startup. The
-exact environment names, provider setup, release probes, lockdown, emergency stop, and teardown order
-are in [`docs/execution/DEPLOYMENT-AND-SHUTDOWN.md`](docs/execution/DEPLOYMENT-AND-SHUTDOWN.md).
+exact environment names are defined in `.env.example`; release identity is checked with
+`pnpm deployment:sha:check`, and operational state is managed with the commands below.
 
 Useful operational commands after deployment:
 
@@ -243,8 +241,6 @@ traceability checks, prose drafting, and adversarial questions about security, s
 The engineer selected the scope, checked the current implementation and Prisma model, chose the claims
 that this README makes, edited the final documentation, and owns every accepted change and verification
 result. AI output, mocks, and planned deployment are not evidence.
-
-The detailed record is in [`docs/ai/AI-USAGE.md`](docs/ai/AI-USAGE.md).
 
 ## Trade-offs and excluded scope
 
