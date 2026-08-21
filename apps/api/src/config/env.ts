@@ -16,10 +16,21 @@ const envSchema = z.object({
 
 export type AppEnv = z.infer<typeof envSchema>;
 
+type BuildCommitEnvironment = Partial<
+  Record<'GIT_COMMIT_SHA' | 'VERCEL_GIT_COMMIT_SHA', string | undefined>
+>;
+
+export function resolveBuildCommitSha(env: BuildCommitEnvironment): string {
+  return env.VERCEL_GIT_COMMIT_SHA ?? env.GIT_COMMIT_SHA ?? 'local';
+}
+
 let cachedEnv: AppEnv | undefined;
 
 export function getEnv(): AppEnv {
-  cachedEnv ??= envSchema.parse(process.env);
+  cachedEnv ??= envSchema.parse({
+    ...process.env,
+    GIT_COMMIT_SHA: resolveBuildCommitSha(process.env),
+  });
   return cachedEnv;
 }
 
