@@ -817,6 +817,7 @@ test.describe('P6-T3 required journeys', () => {
       const descendant = await createFolder(ownerPage, uniqueRunName('public-descendant'), {
         open: false,
       });
+      const sharedPdf = await uploadPdf(ownerPage, `${uniqueRunName('public-document')}.pdf`);
       const share = await createPublicShare(ownerPage);
       const issuedUrl = new URL(share.url);
       expect(issuedUrl.hash.length).toBeGreaterThan(1);
@@ -877,6 +878,9 @@ test.describe('P6-T3 required journeys', () => {
       await expect(publicPage.getByRole('heading', { name: target.name })).toBeVisible();
       await expect(
         publicPage.getByRole('link', { name: descendant.name, exact: true }),
+      ).toBeVisible();
+      await expect(
+        publicPage.getByRole('link', { name: sharedPdf.name, exact: true }),
       ).toBeVisible();
       await expect(publicPage.getByText(sibling.name, { exact: true })).toHaveCount(0);
 
