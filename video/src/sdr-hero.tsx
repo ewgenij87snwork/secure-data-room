@@ -522,7 +522,7 @@ function ProgressRail(): JSX.Element {
   );
 }
 
-export function SdrHero(): JSX.Element {
+export function SdrHero({ showProgress = true }: { showProgress?: boolean }): JSX.Element {
   return (
     <AbsoluteFill
       style={{
@@ -561,7 +561,7 @@ export function SdrHero(): JSX.Element {
       <Sequence from={622} durationInFrames={68} premountFor={15}>
         <AddressHandoff />
       </Sequence>
-      <ProgressRail />
+      {showProgress ? <ProgressRail /> : null}
     </AbsoluteFill>
   );
 }
