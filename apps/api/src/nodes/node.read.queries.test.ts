@@ -11,9 +11,13 @@ describe('node read queries', () => {
     const text = query.strings.join('');
     expect(text).toContain('"dataRoomId"');
     expect(text).toContain('"deletedAt" IS NULL');
+    expect(text).toContain('"hasActiveShare"');
+    expect(text).toContain('WITH RECURSIVE ancestry');
+    expect(text).toContain('share."targetNodeId" = ancestor."id"');
+    expect(text).toContain('child.depth < 64');
     expect(text).not.toContain('storageKey');
     expect(text).not.toContain(room);
-    expect(query.values).toEqual([room, node]);
+    expect(query.values).toEqual([room, node, room]);
   });
 
   it('bounds breadcrumbs at the parameterized access root', () => {

@@ -15,6 +15,10 @@ describe('node pagination queries', () => {
     expect(text).toContain('"dataRoomId"');
     expect(text).toContain('ORDER BY "kind" ASC, "normalizedName" ASC, "id" ASC');
     expect(text).toContain('"deletedAt" IS NULL');
+    expect(text).toContain('"hasActiveShare"');
+    expect(text).toContain('WITH RECURSIVE parent_ancestry');
+    expect(text).toContain('share."targetNodeId" = ancestor."id"');
+    expect(text).toContain('child.depth < 64');
     expect(text).not.toContain("x' OR 1=1");
     expect(nodeCursorAnchorQuery(room, parent, cursor).strings.join('')).toContain('LIMIT 1');
   });

@@ -4,6 +4,7 @@ import { bootstrapResponseSchema } from '@data-room/contracts';
 import { apiRequest } from '../lib/api-client.js';
 import { ApiClientError } from '../lib/api-error.js';
 import { useAuth } from '../features/auth/auth-context.js';
+import { WorkspaceRouteSkeleton } from '../features/data-room/components/workspace-route-skeleton.js';
 import { UploadQueue } from '../features/uploads/components/upload-queue.js';
 
 function AuthState({ title, message }: { title: string; message: string }): React.JSX.Element {
@@ -20,15 +21,42 @@ function AuthState({ title, message }: { title: string; message: string }): Reac
 
 function WorkspaceSkeleton(): React.JSX.Element {
   return (
-    <main className="auth-shell auth-shell--state">
-      <section className="auth-state" aria-labelledby="workspace-loading-title">
-        <div className="skeleton" aria-hidden="true" />
-        <h1 id="workspace-loading-title" className="sr-only">
-          Loading workspace
-        </h1>
-        <p role="status">Loading your private workspace…</p>
-      </section>
-    </main>
+    <div
+      className="workspace-shell workspace-boot"
+      data-testid="workspace-boot-skeleton"
+      aria-busy="true"
+    >
+      <aside className="workspace-shell__sidebar" aria-hidden="true">
+        <div className="workspace-sidebar">
+          <div className="workspace-brand">Secure Data Room</div>
+          <div className="workspace-sidebar__room">
+            <p className="eyebrow eyebrow--inverse">Data room</p>
+            <p className="workspace-sidebar__room-name">My Data Room</p>
+          </div>
+          <div className="workspace-sidebar__navigation">
+            <div className="workspace-boot__nav-line" />
+            <div className="workspace-boot__nav-line" />
+          </div>
+          <p className="workspace-sidebar__assurance">Private by default. Shared deliberately.</p>
+        </div>
+      </aside>
+      <header className="workspace-shell__header" aria-hidden="true">
+        <div className="workspace-header">
+          <div className="workspace-header__privacy">Protected workspace</div>
+          <div className="content-skeleton workspace-boot__identity" />
+        </div>
+      </header>
+      <main className="workspace-shell__main">
+        <WorkspaceRouteSkeleton />
+      </main>
+      <aside className="workspace-shell__context" aria-hidden="true">
+        <div className="folder-context-panel workspace-boot__context">
+          <p className="eyebrow">Folder context</p>
+          <div className="content-skeleton workspace-boot__context-line" />
+          <div className="content-skeleton workspace-boot__context-line workspace-boot__context-line--short" />
+        </div>
+      </aside>
+    </div>
   );
 }
 

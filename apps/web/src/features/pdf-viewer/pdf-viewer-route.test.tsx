@@ -14,6 +14,27 @@ vi.hoisted(() => {
 });
 
 describe('private PDF viewer', () => {
+  it('keeps the document chrome stable while the file metadata is loading', async () => {
+    const fileId = '550e8400-e29b-41d4-a716-446655440001';
+    const pending = deferred<Response>();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => pending.promise),
+    );
+
+    renderViewer(fileId, fileId);
+
+    expect(screen.getByTestId('pdf-viewer-skeleton')).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'Opening document…' })).toBeVisible();
+    expect(
+      screen.queryByRole('heading', { name: 'Opening private document…' }),
+    ).not.toBeInTheDocument();
+
+    pending.resolve(json(node(fileId, 'A.pdf')));
+
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'A.pdf' })).toBeVisible());
+  });
+
   it('uses the browser-native object fallback without a copyable URL control', () => {
     render(<EmbeddedPdf url="https://storage.example.test/signed" name="Contract.pdf" />);
     expect(screen.getByLabelText('PDF document: Contract.pdf')).toHaveAttribute(
@@ -54,7 +75,7 @@ describe('private PDF viewer', () => {
     );
     screen.getByRole('button', { name: 'Navigate to B.pdf' }).click();
     await waitFor(() =>
-      expect(screen.getByRole('heading')).toHaveTextContent('Opening private document'),
+      expect(screen.getByRole('heading', { name: 'Opening private document…' })).toBeVisible(),
     );
     expect(screen.queryByLabelText('PDF document: A.pdf')).not.toBeInTheDocument();
 

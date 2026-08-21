@@ -6,7 +6,11 @@ import { AuthContext, type AuthContextValue } from '../auth/auth-context.js';
 import { SharedWorkspaceLayout } from './shared-workspace-layout.js';
 
 const bootstrap: BootstrapResponse = {
-  user: { id: '550e8400-e29b-41d4-a716-446655440000', email: 'reviewer@example.com', displayName: null },
+  user: {
+    id: '550e8400-e29b-41d4-a716-446655440000',
+    email: 'reviewer@example.com',
+    displayName: null,
+  },
   room: {
     id: '650e8400-e29b-41d4-a716-446655440000',
     name: 'Review room',
@@ -48,7 +52,9 @@ describe('SharedWorkspaceLayout', () => {
       </AuthContext.Provider>,
     );
 
-    expect(screen.getByRole('navigation', { name: 'Workspace' })).toHaveTextContent('Shared with me');
+    expect(screen.getByRole('navigation', { name: 'Workspace' })).toHaveTextContent(
+      'Shared with me',
+    );
     expect(screen.getByRole('banner')).toHaveTextContent('reviewer@example.com');
     expect(screen.getByRole('main')).toHaveAccessibleName('Shared with me');
   });

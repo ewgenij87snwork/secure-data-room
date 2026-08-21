@@ -12,6 +12,7 @@ export interface NodeRow {
   revision: number;
   createdAt: Date;
   updatedAt: Date;
+  hasActiveShare?: boolean;
 }
 
 export function toNodeSummary(node: NodeRow, accessRole: AccessRole): NodeSummary {
@@ -26,7 +27,7 @@ export function toNodeSummary(node: NodeRow, accessRole: AccessRole): NodeSummar
     revision: node.revision,
     createdAt: node.createdAt.toISOString(),
     updatedAt: node.updatedAt.toISOString(),
-    isShared: accessRole !== 'OWNER',
+    isShared: accessRole !== 'OWNER' || node.hasActiveShare === true,
     accessRole,
   });
 }

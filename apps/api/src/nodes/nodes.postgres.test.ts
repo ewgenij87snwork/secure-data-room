@@ -287,6 +287,12 @@ run('NodesService PostgreSQL integration', () => {
       },
     });
     const observedIds = [ids.root, ids.legal, ids.contracts, ids.agreement];
+    const ownerSharedState = new Map([
+      [ids.root, false],
+      [ids.legal, true],
+      [ids.contracts, true],
+      [ids.agreement, true],
+    ]);
     const before = await database.node.findMany({
       where: { id: { in: observedIds } },
       select: { id: true, revision: true, updatedAt: true },
@@ -297,7 +303,7 @@ run('NodesService PostgreSQL integration', () => {
         id: nodeId,
         dataRoomId: ids.room,
         accessRole: 'OWNER',
-        isShared: false,
+        isShared: ownerSharedState.get(nodeId),
       });
     }
     expect(nodeSummarySchema.parse(await reader.getNode(owner, ids.agreement))).toMatchObject({

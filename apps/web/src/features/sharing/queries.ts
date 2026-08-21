@@ -16,6 +16,7 @@ import {
   readSharedWithMe,
   revokeShare,
 } from './api.js';
+import { nodeKeys } from '../data-room/data-room-keys.js';
 
 const tokenKeys = { shared: ['sharing'] as const, public: ['public-share'] as const };
 const requireToken = (token: string | null) => {
@@ -36,7 +37,11 @@ export function useCreatePublicShare(nodeId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => createPublicShare(requireToken(accessToken), nodeId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [...tokenKeys.shared, 'node', nodeId] }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: [...tokenKeys.shared, 'node', nodeId] }),
+        qc.invalidateQueries({ queryKey: nodeKeys.all }),
+      ]),
   });
 }
 export function useCreatePermissionedShare(nodeId: string) {
@@ -45,7 +50,11 @@ export function useCreatePermissionedShare(nodeId: string) {
   return useMutation({
     mutationFn: (input: { email: string }) =>
       createPermissionedShare(requireToken(accessToken), nodeId, input),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [...tokenKeys.shared, 'node', nodeId] }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: [...tokenKeys.shared, 'node', nodeId] }),
+        qc.invalidateQueries({ queryKey: nodeKeys.all }),
+      ]),
   });
 }
 export function useRevokeShare(nodeId: string) {
@@ -53,7 +62,11 @@ export function useRevokeShare(nodeId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (shareId: string) => revokeShare(requireToken(accessToken), shareId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: [...tokenKeys.shared, 'node', nodeId] }),
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: [...tokenKeys.shared, 'node', nodeId] }),
+        qc.invalidateQueries({ queryKey: nodeKeys.all }),
+      ]),
   });
 }
 export function useSharedWithMe() {

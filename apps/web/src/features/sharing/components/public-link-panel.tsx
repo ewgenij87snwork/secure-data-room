@@ -28,9 +28,12 @@ export function PublicLinkPanel({
     <section className="share-section" aria-labelledby="public-link-title">
       <div className="share-section__title">
         <Link2 size={17} aria-hidden="true" />
-        <h2 id="public-link-title">One-time public link</h2>
+        <h2 id="public-link-title">Public link</h2>
       </div>
-      <p>Anyone with this link can view this shared scope. It is shown once.</p>
+      <p>
+        Anyone with this link can view this shared scope. The URL is shown once when created; revoke
+        it here to make this item private again.
+      </p>
       {url ? (
         <>
           <div className="share-link-row">
@@ -76,7 +79,7 @@ export function PublicLinkPanel({
           onClick={onCreate}
           disabled={disabled === true || isCreating === true}
         >
-          {isCreating ? 'Creating…' : 'Create public link'}
+          {isCreating ? 'Creating…' : 'Create public link (shown once)'}
         </button>
       )}
     </section>

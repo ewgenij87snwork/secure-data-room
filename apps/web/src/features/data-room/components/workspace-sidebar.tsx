@@ -17,14 +17,16 @@ export function WorkspaceSidebar({
           {roomName}
         </p>
       </div>
-      <NavLink className="workspace-nav-link" to={`/workspace/${rootNodeId}`}>
-        <FolderRoot size={18} strokeWidth={1.8} aria-hidden="true" />
-        <span>All files</span>
-      </NavLink>
-      <NavLink className="workspace-nav-link" to="/shared">
-        <ShieldCheck size={18} strokeWidth={1.8} aria-hidden="true" />
-        <span>Shared with me</span>
-      </NavLink>
+      <nav className="workspace-sidebar__navigation" aria-label="Data room navigation">
+        <NavLink className="workspace-nav-link" to={`/workspace/${rootNodeId}`}>
+          <FolderRoot size={18} strokeWidth={1.8} aria-hidden="true" />
+          <span>All files</span>
+        </NavLink>
+        <NavLink className="workspace-nav-link" to="/shared">
+          <ShieldCheck size={18} strokeWidth={1.8} aria-hidden="true" />
+          <span>Shared with me</span>
+        </NavLink>
+      </nav>
       <p className="workspace-sidebar__assurance">Private by default. Shared deliberately.</p>
     </div>
   );

@@ -286,9 +286,13 @@ function IdentityUploadQueueProvider({
       void Promise.resolve(cancelUpload(token, sessionId)).catch(() => undefined);
   }, []);
 
+  const clearIntakeErrors = useCallback(() => {
+    dispatch({ type: 'clear-intake-errors' });
+  }, []);
+
   const value = useMemo(
-    () => ({ state, addFiles, retry, cancel }),
-    [addFiles, cancel, retry, state],
+    () => ({ state, addFiles, clearIntakeErrors, retry, cancel }),
+    [addFiles, cancel, clearIntakeErrors, retry, state],
   );
   return <QueueContext.Provider value={value}>{children}</QueueContext.Provider>;
 }

@@ -9,6 +9,7 @@ export function NodeTable({
   onRename,
   onDelete,
   onMove,
+  onShare,
   resolveDestination,
   onOpen,
 }: Readonly<{
@@ -16,6 +17,7 @@ export function NodeTable({
   onRename: (node: NodeSummary, returnFocusElement: HTMLElement | null) => void;
   onDelete: (node: NodeSummary, returnFocusElement: HTMLElement | null) => void;
   onMove: ((node: NodeSummary, returnFocusElement: HTMLElement | null) => void) | undefined;
+  onShare?: ((node: NodeSummary, returnFocusElement: HTMLElement | null) => void) | undefined;
   resolveDestination?: ((node: NodeSummary) => string) | undefined;
   onOpen?: ((node: NodeSummary) => void) | undefined;
 }>): React.JSX.Element {
@@ -50,6 +52,7 @@ export function NodeTable({
                   onRename={onRename}
                   onDelete={onDelete}
                   onMove={onMove}
+                  onShare={onShare}
                 />
               </td>
             </tr>

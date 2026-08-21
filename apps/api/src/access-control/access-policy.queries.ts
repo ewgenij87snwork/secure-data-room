@@ -28,15 +28,19 @@ export function accessPolicyQuery(principal: AccessPrincipal, nodeId: string): P
 
   return Prisma.sql`
     WITH RECURSIVE ancestry AS (
-      SELECT node."id", node."dataRoomId", node."parentId", node."kind", node."deletedAt", 0 AS depth
+      SELECT node."id", node."dataRoomId", node."parentId", node."kind", node."deletedAt", 0 AS depth,
+             ARRAY[node."id"] AS visited
       FROM "Node" node
       WHERE node."id" = ${nodeId}::uuid
       UNION ALL
-      SELECT parent."id", parent."dataRoomId", parent."parentId", parent."kind", parent."deletedAt", child.depth + 1
+      SELECT parent."id", parent."dataRoomId", parent."parentId", parent."kind", parent."deletedAt",
+             child.depth + 1, child.visited || parent."id"
       FROM "Node" parent
       INNER JOIN ancestry child
         ON child."parentId" = parent."id"
        AND child."dataRoomId" = parent."dataRoomId"
+      WHERE child.depth < 64
+        AND NOT parent."id" = ANY(child.visited)
     )
     SELECT
       EXISTS (

@@ -11,7 +11,9 @@ export function SharedNodeRoute(): React.JSX.Element {
   if (node.isLoading)
     return (
       <section className="sharing-page">
-        <h1 id="workspace-title" className="sr-only">Shared item</h1>
+        <h1 id="workspace-title" className="sr-only">
+          Shared item
+        </h1>
         <p role="status">Opening shared item…</p>
       </section>
     );

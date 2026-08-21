@@ -275,6 +275,8 @@ describe('access policy query shape', () => {
     const sql = query.strings.join('');
     expect(sql).toContain('WITH RECURSIVE ancestry');
     expect(sql).toContain('"dataRoomId" = parent."dataRoomId"');
+    expect(sql).toContain('child.depth < 64');
+    expect(sql).toContain('ANY(child.visited)');
     expect(sql).toContain('"revokedAt" IS NULL');
     expect(sql).toContain('"deletedAt" IS NULL');
     expect(sql).toContain('"role" = \'EDITOR\'');

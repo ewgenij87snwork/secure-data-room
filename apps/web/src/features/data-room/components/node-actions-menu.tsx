@@ -1,5 +1,5 @@
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
-import { MoreHorizontal, Pencil, Trash2, Move } from 'lucide-react';
+import { MoreHorizontal, Pencil, Trash2, Move, Share2 } from 'lucide-react';
 import { useRef } from 'react';
 import type { NodeItemViewModel } from './node-view-model.js';
 
@@ -8,11 +8,14 @@ export function NodeActionsMenu({
   onRename,
   onDelete,
   onMove,
+  onShare,
 }: Readonly<{
   item: NodeItemViewModel;
   onRename: (node: NodeItemViewModel['node'], returnFocusElement: HTMLElement | null) => void;
   onDelete: (node: NodeItemViewModel['node'], returnFocusElement: HTMLElement | null) => void;
   onMove:
+    ((node: NodeItemViewModel['node'], returnFocusElement: HTMLElement | null) => void) | undefined;
+  onShare?:
     ((node: NodeItemViewModel['node'], returnFocusElement: HTMLElement | null) => void) | undefined;
 }>): React.JSX.Element | null {
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -39,6 +42,18 @@ export function NodeActionsMenu({
             <Pencil size={16} strokeWidth={1.8} aria-hidden="true" />
             Rename
           </DropdownMenu.Item>
+          {onShare ? (
+            <>
+              <DropdownMenu.Separator className="node-actions-menu__separator" />
+              <DropdownMenu.Item
+                className="node-actions-menu__item"
+                onSelect={() => onShare(item.node, triggerRef.current)}
+              >
+                <Share2 size={16} strokeWidth={1.8} aria-hidden="true" />
+                Manage access
+              </DropdownMenu.Item>
+            </>
+          ) : null}
           <DropdownMenu.Separator className="node-actions-menu__separator" />
           {onMove && item.kind === 'FILE' ? (
             <DropdownMenu.Item

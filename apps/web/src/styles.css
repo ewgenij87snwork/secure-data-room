@@ -307,7 +307,7 @@ a {
   cursor: pointer;
 }
 
-.upload-dropzone label {
+.upload-dropzone__label {
   color: hsl(var(--primary));
   font-weight: 700;
   cursor: pointer;
@@ -563,17 +563,11 @@ body {
   background: hsl(var(--primary) / 0.055);
 }
 
-.workspace-shell {
-  grid-template-columns: 256px minmax(0, 1fr);
-  grid-template-rows: 68px minmax(0, 1fr) auto;
-}
-
 .workspace-shell__sidebar {
   border-right: 1px solid hsl(var(--sidebar-foreground) / 0.08);
 }
 
 .workspace-shell__header {
-  min-height: 68px;
   border-bottom-color: hsl(var(--border) / 0.85);
   background: hsl(var(--surface) / 0.94);
   backdrop-filter: blur(12px);
@@ -594,7 +588,7 @@ body {
 }
 
 .workspace-sidebar__room {
-  margin-top: 44px;
+  margin-top: 40px;
   padding: 0 8px;
 }
 
@@ -605,9 +599,15 @@ body {
   letter-spacing: -0.035em;
 }
 
+.workspace-sidebar__navigation {
+  display: grid;
+  gap: 4px;
+  margin-top: 20px;
+}
+
 .workspace-nav-link {
   min-height: 46px;
-  margin-top: 10px;
+  margin-top: 0;
   border: 1px solid transparent;
   border-radius: 9px;
   font-size: 0.88rem;
@@ -619,7 +619,7 @@ body {
 }
 
 .workspace-sidebar__room + .workspace-nav-link {
-  margin-top: 24px;
+  margin-top: 0;
 }
 
 .workspace-nav-link:hover {
@@ -672,6 +672,139 @@ body {
   font-size: clamp(2.2rem, 4vw, 3.75rem);
   font-weight: 680;
   letter-spacing: -0.055em;
+}
+
+.workspace-route-skeleton {
+  min-height: 460px;
+}
+
+.workspace-boot__nav-line {
+  width: 100%;
+  height: 44px;
+  margin: 0;
+  border-radius: 9px;
+  background: hsl(var(--sidebar-foreground) / 0.1);
+}
+
+.workspace-boot__identity {
+  width: min(18vw, 180px);
+  height: 14px;
+}
+
+.workspace-boot__context-line {
+  width: 100%;
+  height: 16px;
+  margin-top: 22px;
+}
+
+.workspace-boot__context-line--short {
+  width: 68%;
+  margin-top: 14px;
+}
+
+.workspace-route-skeleton__heading {
+  align-items: flex-end;
+}
+
+.workspace-route-skeleton__actions {
+  display: flex;
+  gap: 10px;
+}
+
+.content-skeleton,
+.content-skeleton-table__header,
+.content-skeleton-table__row {
+  overflow: hidden;
+  border-radius: 6px;
+  background: hsl(var(--muted));
+}
+
+.content-skeleton {
+  position: relative;
+}
+
+.content-skeleton::after,
+.content-skeleton-table__header::after,
+.content-skeleton-table__row::after {
+  position: absolute;
+  inset: 0;
+  background: hsl(var(--surface) / 0.56);
+  content: '';
+  opacity: 0.42;
+}
+
+.content-skeleton--breadcrumb {
+  width: 180px;
+  height: 12px;
+}
+
+.content-skeleton--eyebrow {
+  width: 76px;
+  height: 10px;
+}
+
+.content-skeleton--title {
+  width: min(360px, 56vw);
+  height: clamp(38px, 4vw, 58px);
+  margin-top: 12px;
+  border-radius: 8px;
+}
+
+.content-skeleton--button {
+  width: 128px;
+  height: 46px;
+  border-radius: var(--radius-md);
+}
+
+.content-skeleton--button-short {
+  width: 92px;
+}
+
+.content-skeleton-table {
+  margin-top: 24px;
+  border-top: 1px solid hsl(var(--border));
+}
+
+.content-skeleton-table__header,
+.content-skeleton-table__row {
+  position: relative;
+  width: 100%;
+  border-radius: 0;
+}
+
+.content-skeleton-table__header {
+  height: 44px;
+  background: transparent;
+}
+
+.content-skeleton-table__header::after {
+  right: 38%;
+  left: 4px;
+  width: 34%;
+  height: 8px;
+  margin: 18px 0;
+  border-radius: 4px;
+  background: hsl(var(--muted));
+}
+
+.content-skeleton-table__row {
+  height: 66px;
+  border-top: 1px solid hsl(var(--border));
+  background: transparent;
+}
+
+.content-skeleton-table__row::after {
+  left: 4px;
+  width: min(48%, 390px);
+  height: 14px;
+  margin: 26px 0;
+  border-radius: 5px;
+  background: hsl(var(--muted));
+}
+
+.content-skeleton-table--inline {
+  width: 100%;
+  margin-top: 0;
 }
 
 .folder-toolbar {
@@ -762,7 +895,7 @@ body {
   background: hsl(var(--primary) / 0.1);
 }
 
-.upload-dropzone label {
+.upload-dropzone__label {
   font-size: 0.95rem;
 }
 
@@ -959,6 +1092,42 @@ body {
   font-weight: 680;
 }
 
+.access-confirmation {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px 16px;
+  margin: 0 0 2px;
+  padding: 16px;
+  border: 1px solid hsl(var(--primary) / 0.22);
+  border-radius: 10px;
+  background: hsl(var(--primary) / 0.045);
+}
+
+.access-confirmation h2 {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 720;
+  letter-spacing: -0.018em;
+}
+
+.access-confirmation p {
+  margin: 5px 0 0;
+  color: hsl(var(--muted-foreground));
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.access-confirmation .secondary-button {
+  min-height: 40px;
+  align-self: center;
+  white-space: nowrap;
+}
+
+.access-confirmation__hint {
+  grid-column: 1 / -1;
+  margin-top: 0 !important;
+}
+
 .active-share-list {
   max-height: 228px;
   gap: 8px;
@@ -1077,6 +1246,14 @@ body {
     width: 100%;
   }
 
+  .access-confirmation {
+    grid-template-columns: 1fr;
+  }
+
+  .access-confirmation .secondary-button {
+    width: 100%;
+  }
+
   .active-share-list {
     max-height: 190px;
   }
@@ -1152,6 +1329,29 @@ body {
   min-height: calc(100dvh - 64px);
   border: 0;
 }
+
+.pdf-viewer__loading-skeleton {
+  flex: 1;
+  display: grid;
+  align-content: start;
+  gap: 22px;
+  padding: clamp(24px, 4vw, 52px);
+  background: hsl(var(--surface-subtle));
+}
+
+.content-skeleton--pdf-title {
+  width: min(280px, 60vw);
+  height: 16px;
+}
+
+.content-skeleton--pdf-page {
+  width: min(100%, 760px);
+  height: min(68dvh, 860px);
+  min-height: 420px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--surface));
+}
 .pdf-viewer__state {
   flex: 1;
 }
@@ -1169,6 +1369,21 @@ body {
   min-height: 100vh;
   min-height: 100dvh;
   background: hsl(var(--background));
+}
+
+@media (min-width: 768px) {
+  html,
+  body,
+  #root,
+  .workspace-shell {
+    background: linear-gradient(
+      to right,
+      hsl(var(--sidebar)) 0,
+      hsl(var(--sidebar)) 240px,
+      hsl(var(--background)) 240px,
+      hsl(var(--background)) 100%
+    );
+  }
 }
 
 .workspace-shell__sidebar {
@@ -1639,6 +1854,13 @@ body {
   margin: 0 auto;
   padding: 48px 32px;
   color: hsl(var(--foreground));
+}
+
+@supports selector(body:has(*)) {
+  body:has(.sharing-page),
+  #root:has(.sharing-page) {
+    background: hsl(var(--background));
+  }
 }
 .sharing-page__header {
   display: flex;

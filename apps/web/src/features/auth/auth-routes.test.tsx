@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { isSafeIntendedRoute } from './intended-route.js';
 
 describe('auth route safety', () => {
-  it.each(['/workspace', '/workspace?node=123', '/'])(
+  it.each(['/workspace', '/workspace?node=123', '/shared', '/shared/123', '/'])(
     'accepts same-origin application path %s',
     (value) => {
       expect(isSafeIntendedRoute(value)).toBe(true);

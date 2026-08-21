@@ -43,6 +43,7 @@ describe('NodeBrowser', () => {
   });
 
   it('shows owner actions per node instead of inheriting the parent role', () => {
+    const onShare = vi.fn();
     const ownedFile = node({
       id: '550e8400-e29b-41d4-a716-446655440003',
       kind: 'FILE',
@@ -53,7 +54,13 @@ describe('NodeBrowser', () => {
     });
     render(
       <MemoryRouter>
-        <NodeBrowser nodes={[folder, ownedFile]} canManage onRename={vi.fn()} onDelete={vi.fn()} />
+        <NodeBrowser
+          nodes={[folder, ownedFile]}
+          canManage
+          onRename={vi.fn()}
+          onDelete={vi.fn()}
+          onShare={onShare}
+        />
       </MemoryRouter>,
     );
 
@@ -61,6 +68,34 @@ describe('NodeBrowser', () => {
       screen.queryByRole('button', { name: `Actions for ${folder.name}` }),
     ).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Actions for Owned.pdf' })).toHaveLength(2);
+  });
+
+  it('opens access management for an owned file from its actions menu', async () => {
+    const onShare = vi.fn();
+    const ownedFile = node({
+      id: '550e8400-e29b-41d4-a716-446655440003',
+      kind: 'FILE',
+      name: 'Owned.pdf',
+      sizeBytes: '512',
+      mimeType: 'application/pdf',
+      accessRole: 'OWNER',
+    });
+    render(
+      <MemoryRouter>
+        <NodeBrowser
+          nodes={[ownedFile]}
+          canManage
+          onRename={vi.fn()}
+          onDelete={vi.fn()}
+          onShare={onShare}
+        />
+      </MemoryRouter>,
+    );
+
+    await userEvent.click(screen.getAllByRole('button', { name: 'Actions for Owned.pdf' })[0]!);
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Manage access' }));
+
+    expect(onShare).toHaveBeenCalledWith(ownedFile, expect.any(HTMLButtonElement));
   });
 
   it('retains stale rows and exposes a retry when refresh fails', async () => {

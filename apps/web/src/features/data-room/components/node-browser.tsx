@@ -17,6 +17,7 @@ export function NodeBrowser({
   onRename,
   onDelete,
   onMove,
+  onShare,
   resolveDestination,
   onOpen,
 }: Readonly<{
@@ -32,6 +33,7 @@ export function NodeBrowser({
   onRename: (node: NodeSummary, returnFocusElement: HTMLElement | null) => void;
   onDelete: (node: NodeSummary, returnFocusElement: HTMLElement | null) => void;
   onMove?: (node: NodeSummary, returnFocusElement: HTMLElement | null) => void;
+  onShare?: ((node: NodeSummary, returnFocusElement: HTMLElement | null) => void) | undefined;
   resolveDestination?: (node: NodeSummary) => string;
   onOpen?: (node: NodeSummary) => void;
 }>): React.JSX.Element {
@@ -88,6 +90,7 @@ export function NodeBrowser({
         onRename={onRename}
         onDelete={onDelete}
         onMove={onMove}
+        onShare={onShare}
         resolveDestination={resolveDestination}
         onOpen={onOpen}
       />
@@ -96,6 +99,7 @@ export function NodeBrowser({
         onRename={onRename}
         onDelete={onDelete}
         onMove={onMove}
+        onShare={onShare}
         resolveDestination={resolveDestination}
         onOpen={onOpen}
       />

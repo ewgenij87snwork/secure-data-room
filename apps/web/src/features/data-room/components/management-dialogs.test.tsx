@@ -85,10 +85,12 @@ describe('management dialogs', () => {
 
     window.dispatchEvent(new Event('offline'));
 
-    expect(await screen.findByRole('button', { name: 'Create public link' })).toBeDisabled();
+    expect(
+      await screen.findByRole('button', { name: 'Create public link (shown once)' }),
+    ).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Share' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Revoke' })).toBeDisabled();
-    await userEvent.click(screen.getByRole('button', { name: 'Create public link' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Create public link (shown once)' }));
     await userEvent.type(
       screen.getByRole('textbox', { name: 'Email address' }),
       'person@example.com',
@@ -96,6 +98,32 @@ describe('management dialogs', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Share' }));
     expect(fetchMock).toHaveBeenCalledTimes(1);
     window.dispatchEvent(new Event('online'));
+  });
+
+  it('confirms a person-share with a safe link to Shared with me', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({ items: [] }))
+      .mockResolvedValueOnce(
+        jsonResponse({
+          ...shareSummary(),
+          principalType: 'USER',
+          recipientEmail: 'person@example.com',
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+    const { ShareDialog } = await import('../../sharing/components/share-dialog.js');
+    renderWithClient(<ShareDialog node={folderNode()} open onOpenChange={vi.fn()} />);
+
+    await userEvent.type(
+      screen.getByRole('textbox', { name: 'Email address' }),
+      'person@example.com',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Share' }));
+
+    expect(await screen.findByRole('heading', { name: 'Access granted' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Copy invitation link' })).toBeVisible();
+    expect(screen.getByText(/already signed in/i)).toBeVisible();
   });
 
   it('waits for and renders every exact delete impact count before enabling deletion', async () => {

@@ -44,7 +44,23 @@ export function PdfViewerRoute(): React.JSX.Element {
     const timer = window.setTimeout(load, Math.min(delay, 60000));
     return () => window.clearTimeout(timer);
   }, [view, load]);
-  if (node.isLoading || (state === 'loading' && !node.data)) return <ViewerState state="loading" />;
+  if (node.isLoading || (state === 'loading' && !node.data)) {
+    return (
+      <main className="pdf-viewer">
+        <PdfViewerToolbar name="Opening document…" onRefresh={load} />
+        <section
+          className="pdf-viewer__loading-skeleton"
+          data-testid="pdf-viewer-skeleton"
+          role="status"
+          aria-label="Loading document"
+        >
+          <span className="sr-only">Loading document</span>
+          <div className="content-skeleton content-skeleton--pdf-title" aria-hidden="true" />
+          <div className="content-skeleton content-skeleton--pdf-page" aria-hidden="true" />
+        </section>
+      </main>
+    );
+  }
   if (node.isError || !node.data) return <ViewerState state={viewerErrorState(node.error)} />;
   return (
     <main className="pdf-viewer">

@@ -9,6 +9,7 @@ export function NodeCardList({
   onRename,
   onDelete,
   onMove,
+  onShare,
   resolveDestination,
   onOpen,
 }: Readonly<{
@@ -16,6 +17,7 @@ export function NodeCardList({
   onRename: (node: NodeSummary, returnFocusElement: HTMLElement | null) => void;
   onDelete: (node: NodeSummary, returnFocusElement: HTMLElement | null) => void;
   onMove: ((node: NodeSummary, returnFocusElement: HTMLElement | null) => void) | undefined;
+  onShare?: ((node: NodeSummary, returnFocusElement: HTMLElement | null) => void) | undefined;
   resolveDestination?: ((node: NodeSummary) => string) | undefined;
   onOpen?: ((node: NodeSummary) => void) | undefined;
 }>): React.JSX.Element {
@@ -25,7 +27,13 @@ export function NodeCardList({
         <li className="node-card" key={item.id}>
           <div className="node-card__name">
             <NodeName item={item} resolveDestination={resolveDestination} onOpen={onOpen} />
-            <NodeActionsMenu item={item} onRename={onRename} onDelete={onDelete} onMove={onMove} />
+            <NodeActionsMenu
+              item={item}
+              onRename={onRename}
+              onDelete={onDelete}
+              onMove={onMove}
+              onShare={onShare}
+            />
           </div>
           <dl className="node-card__metadata">
             <div>

@@ -73,6 +73,16 @@ describe('NodesReadService', () => {
     expect(Object.isFrozen(result)).toBe(true);
   });
 
+  it('marks an owner node as shared when an active grant exists', async () => {
+    const h = harness();
+    h.prisma.$queryRaw.mockResolvedValue([{ ...row, hasActiveShare: true }]);
+
+    await expect(h.service.getNode(principal, nodeId)).resolves.toMatchObject({
+      accessRole: 'OWNER',
+      isShared: true,
+    });
+  });
+
   it('fails closed when authorized node metadata becomes stale', async () => {
     const h = harness();
     h.prisma.$queryRaw.mockResolvedValue([]);

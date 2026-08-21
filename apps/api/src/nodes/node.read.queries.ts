@@ -3,12 +3,36 @@ import type { NodeRow } from './node-summary.js';
 
 export function activeNodeQuery(dataRoomId: string, nodeId: string): Prisma.Sql {
   return Prisma.sql`
-    SELECT "id", "dataRoomId", "parentId", "kind", "name", "normalizedName",
-           "sizeBytes", "mimeType", "revision", "createdAt", "updatedAt"
-    FROM "Node"
-    WHERE "dataRoomId" = ${dataRoomId}::uuid
-      AND "id" = ${nodeId}::uuid
-      AND "deletedAt" IS NULL
+    WITH RECURSIVE ancestry AS (
+      SELECT node."id", node."dataRoomId", node."parentId", node."kind", node."name", node."normalizedName",
+             node."sizeBytes", node."mimeType", node."revision", node."createdAt", node."updatedAt",
+             0 AS depth, ARRAY[node."id"] AS visited
+      FROM "Node" node
+      WHERE node."dataRoomId" = ${dataRoomId}::uuid
+        AND node."id" = ${nodeId}::uuid
+        AND node."deletedAt" IS NULL
+      UNION ALL
+      SELECT parent."id", parent."dataRoomId", parent."parentId", parent."kind", parent."name", parent."normalizedName",
+             parent."sizeBytes", parent."mimeType", parent."revision", parent."createdAt", parent."updatedAt",
+             child.depth + 1, child.visited || parent."id"
+      FROM "Node" parent
+      INNER JOIN ancestry child ON child."parentId" = parent."id"
+      WHERE parent."dataRoomId" = ${dataRoomId}::uuid
+        AND parent."deletedAt" IS NULL
+        AND child.depth < 64
+        AND NOT parent."id" = ANY(child.visited)
+    )
+    SELECT node."id", node."dataRoomId", node."parentId", node."kind", node."name", node."normalizedName",
+           node."sizeBytes", node."mimeType", node."revision", node."createdAt", node."updatedAt",
+           EXISTS (
+             SELECT 1
+             FROM "Share" share
+             INNER JOIN ancestry ancestor ON share."targetNodeId" = ancestor."id"
+             WHERE node.depth = 0
+               AND share."revokedAt" IS NULL
+           ) AS "hasActiveShare"
+    FROM ancestry node
+    WHERE node.depth = 0
     LIMIT 1
   `;
 }

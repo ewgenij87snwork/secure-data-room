@@ -1,4 +1,10 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 import type { CreateFolderRequest, NodeSummary } from '@data-room/contracts';
 import { useAuth } from '../auth/auth-context.js';
 import {
@@ -24,6 +30,7 @@ export function useNode(nodeId: string) {
     queryKey: nodeKeys.detail(nodeId),
     enabled: Boolean(accessToken && nodeId),
     queryFn: () => readNode(requireAccessToken(accessToken), nodeId),
+    placeholderData: keepPreviousData,
   });
 }
 
@@ -33,6 +40,7 @@ export function useNodeBreadcrumbs(nodeId: string) {
     queryKey: nodeKeys.breadcrumbs(nodeId),
     enabled: Boolean(accessToken && nodeId),
     queryFn: () => readBreadcrumbs(requireAccessToken(accessToken), nodeId),
+    placeholderData: keepPreviousData,
   });
 }
 
