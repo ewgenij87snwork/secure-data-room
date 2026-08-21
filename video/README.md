@@ -1,17 +1,84 @@
-# Secure Data Room video kit
+# Secure Data Room video workshop
 
-This isolated Remotion package turns real, sanitized Playwright captures into the README hero.
-It is intentionally outside the application workspace so product dependencies remain unchanged.
+Этот изолированный Remotion-пакет собирает README-ролик из локальных обезличенных capture-файлов.
+Приложение и production-данные он не использует: композиция полностью детерминирована кадрами.
+
+## Первый запуск — 5 минут
 
 ```bash
 cd video
 npm ci
-npm run typecheck
-npm run render
-npm run render:gif
+npm run studio -- --port=3010
 ```
 
-The package pins every Remotion dependency to the same exact version. Captures and fonts are local,
-and the composition is frame-driven: no network requests, `Date`, or randomness during rendering.
-The README embeds an optimized 840×630 GIF and links a 1440×1080 MP4 master. Both preserve the
-same 30-second reviewer flow; the Remotion composition is the polished, repeatable presentation layer.
+Открой `http://localhost:3010` и выбери `SdrSceneShare`. Это отдельная восьмисекундная монтажная
+сцена настоящего ролика, а не копия или макет. Голубая пунктирная рамка, название сцены и локальный
+таймкод присутствуют только в workshop-композициях и никогда не попадают в `SdrHero`.
+
+### Основные действия в Studio
+
+- `Space` — play/pause;
+- `←` / `→` — на один кадр назад/вперёд;
+- `A` / `E` — начало/конец сцены;
+- `I` / `O` — задать начало/конец временного диапазона для повторного просмотра;
+- `X` — очистить диапазон;
+- `+` / `-` / `0` — приблизить, отдалить или сбросить масштаб preview;
+- `?` — показать все актуальные shortcuts;
+- `⌘Z` — отменить визуальную правку, `⌘Y` — вернуть её.
+
+Кликни по рамке `Share scene canvas`, чтобы выбрать сцену. Её можно осторожно двигать и
+масштабировать: `P` выбирает translate, `S` — scale. Начинай с небольших изменений и сразу проверяй
+их воспроизведением. Если результат не нравится, нажми `⌘Z`.
+
+## Сцены
+
+| Аргумент команды | Композиция в Studio | Содержание |
+| --- | --- | --- |
+| `login` | `SdrSceneLogin` | вход |
+| `create-folder` | `SdrSceneCreateFolder` | создание `docs` |
+| `upload` | `SdrSceneUpload` | добавление двух PDF |
+| `share` | `SdrSceneShare` | выдача view-only доступа |
+| `recipient` | `SdrSceneRecipient` | переход к получателю |
+| `document` | `SdrSceneDocument` | открытие PDF |
+
+`SdrHero` — весь 30-секундный ролик без монтажных подсказок.
+
+## Быстрая проверка без полного экспорта
+
+```bash
+# Один кадр из середины сцены
+npm run still -- share
+
+# Лёгкий MP4 только одной сцены
+npm run draft:scene -- share
+
+# Лёгкий MP4 всего сюжета
+npm run review
+```
+
+Все промежуточные результаты сохраняются в `video/out/drafts/`. Они не заменяют файлы, встроенные
+в корневой README.
+
+## Финальная выдача
+
+Только после визуального утверждения всего `SdrHero`:
+
+```bash
+npm run test:workflow
+npm run typecheck
+npm run deliver
+```
+
+`deliver` создаёт master MP4 и GIF в `video/out/`. Перенос этих файлов в `assets/readme/`, commit,
+push и deploy выполняются отдельно и только по явному решению владельца.
+
+## Формат замечаний
+
+Чтобы следующая итерация занимала минуты, записывай замечание так:
+
+```text
+share / 2.4s / задержать курсор на Share ещё на 0.5s
+upload / 3.1s / дольше показать прогресс второго файла
+```
+
+Имя сцены и локальная секунда всегда видны в левом нижнем углу workshop-preview.
