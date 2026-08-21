@@ -158,7 +158,6 @@ apps/api/       NestJS application backend
 packages/       Shared Zod contracts and stable error codes
 prisma/         Schema, migration, seed, and database invariants
 tests/e2e/      Playwright journey definitions
-governance/     Machine-checked requirement traceability and progress registry
 ```
 
 ## Clean local setup
@@ -191,7 +190,6 @@ Focused repository checks:
 
 ```bash
 pnpm architecture:check
-pnpm requirements:check
 pnpm placeholders:check
 pnpm format:check
 git diff --check

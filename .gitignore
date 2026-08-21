@@ -15,4 +15,7 @@ test-results/
 /shared
 /docs/
 /prompts/
+/AGENTS.md
+/source/
+/governance/
 apps/api/src/generated/prisma/
