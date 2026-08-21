@@ -70,7 +70,11 @@ run('NodesService PostgreSQL integration', () => {
   let pool: Pool | undefined;
   let prisma: PrismaClient | undefined;
   let service: NodesService | undefined;
-  const signedReadCalls: { storageKey: string; ttlSeconds: number }[] = [];
+  const signedReadCalls: {
+    storageKey: string;
+    ttlSeconds: number;
+    downloadName?: string;
+  }[] = [];
   let listService: NodesListService | undefined;
   let readService: NodesReadService | undefined;
   let deleteService: DeleteService | undefined;
@@ -168,9 +172,9 @@ run('NodesService PostgreSQL integration', () => {
     });
     const accessPolicy = new AccessPolicyService(prisma);
     service = new NodesService(prisma, accessPolicy, new RuntimeControlsService(), {
-      createSignedReadUrl: (storageKey: string, ttlSeconds: number) => {
-        signedReadCalls.push({ storageKey, ttlSeconds });
-        return 'signed-url';
+      createSignedReadUrl: (storageKey: string, ttlSeconds: number, downloadName?: string) => {
+        signedReadCalls.push({ storageKey, ttlSeconds, ...(downloadName ? { downloadName } : {}) });
+        return downloadName ? 'signed-download-url' : 'signed-url';
       },
     } as never);
     listService = new NodesListService(prisma, accessPolicy);
@@ -584,9 +588,13 @@ run('NodesService PostgreSQL integration', () => {
     });
     await expect(nodes.createViewUrl(viewer, ids.file)).resolves.toMatchObject({
       url: 'signed-url',
+      downloadUrl: 'signed-download-url',
       expiresAt: expect.any(String) as string,
     });
-    expect(signedReadCalls).toEqual([{ storageKey: 'tests/file.pdf', ttlSeconds: 60 }]);
+    expect(signedReadCalls).toEqual([
+      { storageKey: 'tests/file.pdf', ttlSeconds: 60 },
+      { storageKey: 'tests/file.pdf', ttlSeconds: 60, downloadName: 'File.pdf' },
+    ]);
     await database.share.update({ where: { id: ids.share }, data: { revokedAt: new Date() } });
     await expect(nodes.createViewUrl(viewer, ids.file)).rejects.toMatchObject({
       response: { error: { code: 'ACCESS_DENIED' } },
@@ -595,7 +603,7 @@ run('NodesService PostgreSQL integration', () => {
     await expect(nodes.createViewUrl(owner, ids.file)).rejects.toMatchObject({
       response: { error: { code: 'ACCESS_DENIED' } },
     });
-    expect(signedReadCalls).toHaveLength(1);
+    expect(signedReadCalls).toHaveLength(2);
   });
 
   it('allows one same-revision rename and one same-sibling-name winner under concurrency', async () => {
