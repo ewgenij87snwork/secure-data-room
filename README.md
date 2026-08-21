@@ -8,7 +8,7 @@
 ## See it live
 
 - **Web:** [secure-data-room-web.vercel.app](https://secure-data-room-web.vercel.app)
-- **API health:** [secure-data-room-api.vercel.app/v1/health](https://secure-data-room-api.vercel.app/v1/health)
+- **API health:** [secure-data-room-api.vercel.app/v1/health/ready](https://secure-data-room-api.vercel.app/v1/health/ready)
 - **Repository:** [github.com/ewgenij87snwork/secure-data-room](https://github.com/ewgenij87snwork/secure-data-room)
 
 The Web and API expose their build identity and are promoted from one verified commit.
