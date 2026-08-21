@@ -8,6 +8,7 @@ import { EmbeddedPdf } from '../pdf-viewer/components/embedded-pdf.js';
 import { ViewerState, type ViewerStateName } from '../pdf-viewer/components/viewer-state.js';
 import { ApiClientError } from '../../lib/api-error.js';
 import { NodeBrowser } from '../data-room/components/node-browser.js';
+import { CreatorSignature } from '../data-room/components/creator-signature.js';
 import { ReadOnlyBanner } from './components/read-only-banner.js';
 export function PublicShareRoute(): React.JSX.Element {
   const query = usePublicShare();
@@ -28,12 +29,14 @@ export function PublicShareRoute(): React.JSX.Element {
             : 'This public link is invalid or expired.'}
         </h1>
         <p role="alert">Ask the owner for a new link.</p>
+        <CreatorSignature className="creator-signature--public" />
       </main>
     );
   if (query.isLoading || !node)
     return (
       <main className="sharing-page">
         <p role="status">Opening public link…</p>
+        <CreatorSignature className="creator-signature--public" />
       </main>
     );
   return (
@@ -76,6 +79,7 @@ export function PublicShareRoute(): React.JSX.Element {
       <Link className="secondary-button" to="/sign-in" onClick={() => clearPublicShareToken()}>
         Sign in
       </Link>
+      <CreatorSignature className="creator-signature--public" />
     </main>
   );
 }

@@ -1,48 +1,48 @@
 # Secure Data Room
 
-> A production-minded Data Room MVP for organizing and securely sharing due-diligence PDFs.
+> A production-minded Data Room MVP for organizing and deliberately sharing due-diligence PDFs.
 
-## Live URLs
+[![GitHub](https://img.shields.io/badge/GitHub-ewgenij87snwork-111827?logo=github&logoColor=white)](https://github.com/ewgenij87snwork)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Yevgeniy%20Sorokin-0A66C2?logo=linkedin&logoColor=white)](https://www.linkedin.com/in/yevgeniy-sorokin-829b7b18a/)
 
-Deployment is pending P7. There are no public frontend or backend URLs yet; this README contains no
-placeholder or fabricated URL. Local URLs are listed below.
+## See it live
 
-## Two-minute tour
+- **Web:** [secure-data-room-web.vercel.app](https://secure-data-room-web.vercel.app)
+- **API health:** [secure-data-room-api.vercel.app/v1/health](https://secure-data-room-api.vercel.app/v1/health)
+- **Repository:** [github.com/ewgenij87snwork/secure-data-room](https://github.com/ewgenij87snwork/secure-data-room)
 
-The implemented reviewer path is:
+The Web and API expose their build identity and are promoted from one verified commit.
 
-1. Sign in with Google; the owner receives a private default Data Room.
-2. Create nested folders such as `Legal/Contracts` and navigate with breadcrumbs.
-3. Add multiple PDFs by drag-and-drop or file picker. Each upload has independent progress, retry,
-   cancel, and validation state.
-4. Open a PDF, rename it, move it, and delete it. Same-folder conflicts return a safe suggestion.
-5. Share a room, folder, or file with a public link or a permissioned read-only share.
-6. Revoke access and observe the deliberate revoked/gone state on the next protected request.
-7. Delete a folder after reviewing its recursive folder/file/byte/share impact.
+## A two-minute reviewer tour
 
-The public-link, second-user, and deployed journeys are implementation targets with repository tests;
-their production smoke evidence is pending P7.
+1. Sign in with Google. A private default Data Room is created for the owner.
+2. Create nested folders and follow breadcrumbs; use the PDF drop zone to upload one or more files.
+3. Open the file menu to rename, move, or delete a document.
+4. Select **Share** on a room or folder. Create a public read-only link, or grant a verified email view-only access.
+5. Open the link in a private window to see the read-only view. Revoke it from the owner’s Share dialog.
 
-## Current implementation and evidence
+<p align="center">
+  <picture>
+    <source media="(prefers-reduced-motion: no-preference)" srcset="assets/readme/secure-data-room-demo.gif">
+    <img src="assets/readme/secure-data-room-demo.svg" alt="Secure Data Room reviewer tour: private workspace, upload, and read-only sharing" width="900">
+  </picture>
+</p>
 
-“Implemented” below means the source and focused tests for the behavior are present in this checkout.
-It does not mean that an external database, blob bucket, or deployment was verified. Production
-smoke evidence and the final matching-SHA receipt remain explicitly open.
+> The animation is a compact reviewer tour; a static storyboard is used when reduced motion is preferred.
 
-| Capability                                                                   | Current state                                         | Evidence in this repository                                             |
-| ---------------------------------------------------------------------------- | ----------------------------------------------------- | ----------------------------------------------------------------------- |
-| Google authentication and private owner boundary                             | Implemented; deployment proof pending                 | `apps/api/src/auth/`, `apps/api/src/access-control/`, web auth tests    |
-| Nested folders, contents, breadcrumbs, and rename                            | Implemented; DB execution not claimed                 | `apps/api/src/nodes/`, `apps/web/src/features/data-room/`, node tests   |
-| Recursive delete with impact preview and cleanup job                         | Implemented; DB execution not claimed                 | `apps/api/src/nodes/delete.*`, `apps/api/src/cleanup/`, delete tests    |
-| Multi-PDF drag/drop with per-file progress                                   | Implemented; Storage proof pending                    | `apps/web/src/features/uploads/`, `apps/api/src/uploads/`, upload tests |
-| PDF view, rename, move, and delete                                           | Implemented; Storage proof pending                    | PDF viewer and node feature tests                                       |
-| Public-link subtree access and revoke                                        | Implemented; deployed smoke pending                   | `apps/api/src/shares/`, public-token tests, access-policy tests         |
-| Permissioned read-only sharing and Shared with me                            | Implemented; deployed smoke pending                   | share/access-control services and tests                                 |
-| Loading, empty, offline, conflict, quota, gone, revoked, invalid-link states | Implemented in UI/contracts; browser smoke pending    | web feature tests and stable contract errors                            |
-| Responsive and keyboard-accessible flows                                     | Implemented in UI; final accessibility review pending | web component tests and required Playwright journeys                    |
-| Frontend/backend deployed at one Git SHA                                     | Not evidenced; pending P7                             | No deployment URLs or final-SHA evidence yet                            |
-| Filename search                                                              | Excluded from this build                              | Optional scope is not implemented or claimed                            |
-| File versioning                                                              | Excluded from this build                              | Optional scope is not implemented or claimed                            |
+## What is implemented
+
+| Capability                                                                   | Status            | Evidence                                                  |
+| ---------------------------------------------------------------------------- | ----------------- | --------------------------------------------------------- |
+| Google authentication and private owner boundary                             | Implemented       | `apps/api/src/auth/`, `apps/api/src/access-control/`      |
+| Nested folders, breadcrumbs, rename, and move                                | Implemented       | `apps/api/src/nodes/`, `apps/web/src/features/data-room/` |
+| Multi-PDF drag/drop with per-file progress, retry, cancel, and validation    | Implemented       | `apps/web/src/features/uploads/`, `apps/api/src/uploads/` |
+| PDF view and delete flows                                                    | Implemented       | Web node features and API node tests                      |
+| Public-link subtree access and revoke                                        | Implemented       | `apps/api/src/shares/`, public-token tests                |
+| Permissioned read-only sharing and Shared with me                            | Implemented       | Share/access-control services and tests                   |
+| Loading, empty, offline, conflict, quota, gone, revoked, invalid-link states | Implemented       | Web feature tests and stable API error contracts          |
+| Responsive and keyboard-accessible flows                                     | Implemented       | Web component tests and UI contracts                      |
+| Filename search and file versioning                                          | Excluded from MVP | Intentionally not implemented or claimed                  |
 
 ## Architecture
 
@@ -55,25 +55,9 @@ flowchart LR
   W -->|signed TUS upload and short-lived read URL| S
 ```
 
-NestJS is the only application backend and authorization authority. Prisma is the only application-
-table access path. The browser uses Supabase directly only for identity and narrowly scoped signed
-Storage operations; it never queries application tables. PDF bytes never pass through a NestJS request
-body. Storage keys are immutable random identifiers, not user filenames.
+NestJS is the only application backend and authorization authority. Prisma is the only application-table access path. The browser uses Supabase directly only for identity and narrowly scoped signed Storage operations; it never queries application tables. PDF bytes never pass through a NestJS request body. Storage keys are immutable random identifiers, not user filenames.
 
-## Design decisions
-
-- React/Vite is an interaction-heavy authenticated SPA; a second Next.js server runtime would add no
-  required SSR, SEO, or BFF responsibility.
-- `Node` is an adjacency list for room roots, folders, and files. One share target model therefore
-  covers a room root, folder, or file.
-- Direct signed TUS uploads keep PDF bodies out of the function request path while preserving per-file
-  progress. Finalization is idempotent and verifies the stored object.
-- PostgreSQL partial unique indexes remain authoritative for active sibling names and room roots;
-  application checks only improve errors and suggestions.
-- Deletion tombstones the subtree, revokes affected shares, and enqueues one idempotent cleanup job.
-  Database and object storage cannot participate in one transaction.
-
-## Data model / ERD
+### Data model
 
 ```mermaid
 erDiagram
@@ -82,174 +66,77 @@ erDiagram
   NODE ||--o{ NODE : parent_of
   USER_PROFILE ||--o{ UPLOAD_SESSION : starts
   NODE ||--o{ UPLOAD_SESSION : receives
-  NODE o|--o| UPLOAD_SESSION : finalizes
-  NODE ||--o{ SHARE : targets
+  NODE ||--o| SHARE : targets
   USER_PROFILE ||--o{ SHARE : grants
   USER_PROFILE o|--o{ SHARE : receives
   NODE ||--o| STORAGE_CLEANUP_JOB : cleans
 ```
 
-The Prisma source of truth is [`prisma/schema.prisma`](prisma/schema.prisma), with the reviewed SQL
-in [`prisma/migrations/20260817000000_foundation/migration.sql`](prisma/migrations/20260817000000_foundation/migration.sql).
-`RuntimeControl` is a singleton operational table and is intentionally omitted from the relationship
-diagram because it has no foreign-key relationship.
+Source of truth: [`prisma/schema.prisma`](prisma/schema.prisma).
 
-## How it scales
+## Security posture and honest limits
 
-### How is whole-subtree item count and total size computed?
+- Server-side auth checks issuer, audience, expiry, subject, and JWKS signature; protected reads and mutations pass through `AccessPolicyService`.
+- The bucket is private, object keys are random, and public-link secrets are 256-bit random values stored only as SHA-256 digests. Tokens begin in the URL fragment and are removed after capture.
+- Public sharing is read-only and scoped to the selected subtree. Revocation blocks new access; an already-issued signed PDF URL has a disclosed maximum residual TTL of 60 seconds.
+- PostgreSQL RLS, quotas, runtime kill switches, tombstones, and an idempotent storage cleanup job provide defense in depth.
+- This is a take-home MVP, not a compliance certification. Malware scanning, immutable audit logging, retention/backups, enterprise identity, WAF policy, and incident response remain outside this submission.
 
-The correctness path is a room-scoped recursive PostgreSQL CTE from the selected node. It counts
-active descendant folders/files and sums `sizeBytes` for active file nodes. The same bounded traversal
-drives delete impact. If measured read volume requires it, maintained ancestor counters or an
-asynchronous aggregate with reconciliation can serve repeated display reads; the CTE remains the
-rebuild/audit path.
+## Scale decisions
 
-### What changes when one Data Room holds 100,000 files?
+- Recursive PostgreSQL CTEs compute bounded subtree impact and total size; they are also the rebuild/audit path.
+- A 100,000-file room lists one parent at a time with keyset pagination over `(kind, normalizedName, id)` and a hard page limit; the whole tree is never rendered.
+- `Share` targets a room root, folder, or file and stores `VIEWER`/`EDITOR`; the MVP exposes only view-only sharing.
 
-List one parent at a time with keyset pagination over `(kind, normalizedName, id)` and a hard page
-limit; never fetch or render the whole tree. The active-children partial index is scoped by room and
-parent. Breadcrumbs use an upward recursive query; downward traversal is reserved for bounded impact
-and cleanup work. Virtualize only a genuinely large visible page. If search is later implemented, add
-a room-scoped normalized trigram/GIN index with its own migration rather than carrying unused search
-infrastructure in this build.
+## Local setup
 
-### How does sharing extend to viewer/editor roles without remodeling?
-
-`Share` already targets any `Node` and stores `ShareRole` (`VIEWER` or `EDITOR`). `AccessPolicyService`
-resolves the effective role for the target subtree. The deadline UI grants read-only access; enabling
-editors requires only an explicit policy matrix for allowed mutations, not a new share or target model.
-
-## Edge cases
-
-- Database uniqueness handles concurrent same-name writes; the loser receives `NAME_CONFLICT` and a
-  bounded suggestion rather than overwriting.
-- Mixed upload batches keep invalid, failed, cancelled, and successful files independent.
-- Duplicate finalize, delete, and revoke operations are idempotent.
-- Deleting a shared/viewed subtree makes it unreadable immediately and returns a deliberate gone state.
-- Email shares bind to the immutable authenticated user ID when the recipient first registers.
-- Cross-room IDs and sibling/ancestor escapes fail closed without private metadata leakage.
-- Public-link secrets start in the URL fragment, are removed after capture, and only their SHA-256
-  digest is stored.
-- A signed PDF URL already issued cannot be revoked retroactively; the residual maximum TTL is 60
-  seconds and no new URL is issued after revoke/delete.
-- Storage deletion failure leaves content logically unavailable and retries through one cleanup job.
-- Revision compare-and-swap rejects stale rename/move tabs instead of silently losing updates.
-
-## Security and honest limitations
-
-JWT issuer, audience, expiry, subject, and JWKS signature are checked server-side. Every protected
-read and mutation passes through `AccessPolicyService`; PostgreSQL RLS and revoked browser grants are
-defense in depth. The bucket is private, object keys are random, public tokens are 256-bit random
-secrets stored only as hashes, and application quotas plus runtime kill switches bound free-tier
-abuse. Provider/WAF rate limiting remains an explicit P7 deployment configuration, not a repository
-claim.
-
-The MVP does not perform malware scanning, immutable audit logging, retention/backups, enterprise
-identity, or compliance certification. It is production-minded, not safe for real acquisition data
-without those controls and an operational review. Static security scanning is a repository guard, not
-a security certification. Runtime review, lockdown, maintenance, and cleanup controls are exposed by
-the `pnpm ops:*` commands below.
-
-## Repository map
-
-```text
-apps/web/       React/Vite browser application
-apps/api/       NestJS application backend
-packages/       Shared Zod contracts and stable error codes
-prisma/         Schema, migration, seed, and database invariants
-tests/e2e/      Playwright journey definitions
-```
-
-## Clean local setup
-
-Prerequisites: Node.js 24.x, Corepack, pnpm 11.17.0, and a disposable PostgreSQL/Supabase
-development database. From a clean clone:
+Prerequisites: Node.js 24.x, Corepack, pnpm 11.17.0, and a disposable PostgreSQL/Supabase development database.
 
 ```bash
 corepack enable
 corepack prepare pnpm@11.17.0 --activate
 pnpm install --frozen-lockfile
 cp .env.example .env.local
-set -a
-source ./.env.local
-set +a
+# Fill .env.local with local values; never commit it.
+set -a && source ./.env.local && set +a
 pnpm prisma:generate
 pnpm prisma:migrate:dev
 pnpm dev
 ```
 
-Set the values documented in `.env.example` before sourcing the file. The explicit export makes the
-variables available to Prisma and Vite and, importantly, to the NestJS process, whose `getEnv` reads
-from `process.env` rather than `.env.local`. Keep server-only credentials out of `VITE_*`. Local
-endpoints are `http://localhost:5173`, API
-`http://localhost:3000/v1`, and Swagger `http://localhost:3000/docs`.
+Local Web is `http://localhost:5173`, API is `http://localhost:3000/v1`, and Swagger is `http://localhost:3000/docs`. Keep server-only credentials out of `VITE_*`.
 
-## Verification commands
-
-Focused repository checks:
+## Verification
 
 ```bash
 pnpm architecture:check
 pnpm placeholders:check
 pnpm format:check
 git diff --check
-```
-
-The consolidated gate is:
-
-```bash
 pnpm verify
 ```
 
-`pnpm verify` includes builds, type checks, tests, generated-artifact checks, security scanning, and
-the focused checks above. Database integration tests require the configured disposable database;
-deployed E2E requires P7 URLs and credentials. Neither is represented as completed here.
-
-Local Playwright journeys use `http://127.0.0.1:5173` for Web and
-`http://127.0.0.1:3000` for API. After sourcing the ignored local environment and preparing the
-three distinct owner, viewer, and unrelated storage states required by `tests/e2e/global-setup.js`,
-set a unique `E2E_RUN_ID`, then run `pnpm e2e:local`; Playwright starts or reuses both development
-servers. Capture storage state separately for local and production because browser local storage is
-origin-scoped. `pnpm e2e:list` remains a server-free discovery gate. The local Supabase redirect
-allowlist and `WEB_ORIGINS` must contain the exact `127.0.0.1:5173` origin used by this mode.
-
-After deploying both projects from one commit, run
-`pnpm deployment:sha:check -- --web-url <web-origin> --api-url <api-origin>`. It compares the public
-Web build marker with `/v1/health/version` and fails if either value is missing or differs.
-
-## Deployment and shutdown
-
-P7 will deploy the web and API as separate Vercel projects from one commit SHA, with Supabase Auth,
-PostgreSQL, and private Storage. Migrations run separately; they never run during API startup. The
-exact environment names are defined in `.env.example`; release identity is checked with
-`pnpm deployment:sha:check`, and operational state is managed with the commands below.
-
-Useful operational commands after deployment:
+The deployed release identity can be checked with:
 
 ```bash
-pnpm ops:status
-pnpm ops:lockdown -- --confirm
-pnpm ops:maintenance:on -- --confirm
+pnpm deployment:sha:check -- \
+  --web-url https://secure-data-room-web.vercel.app \
+  --api-url https://secure-data-room-api.vercel.app
 ```
 
-## AI usage and human judgement
+## Deliberate trade-offs
 
-AI was used in the working session for requirement extraction, architecture/document review,
-traceability checks, prose drafting, and adversarial questions about security, scaling, and edge cases.
-The engineer selected the scope, checked the current implementation and Prisma model, chose the claims
-that this README makes, edited the final documentation, and owns every accepted change and verification
-result. AI output, mocks, and planned deployment are not evidence.
+- One default room per owner keeps the deadline model small; multiple rooms would need an explicit default-room choice.
+- Tombstones and cleanup-job records are the recoverable deadline-build boundary; production needs a reviewed retention and purge policy.
+- Search and file versioning are optional assignment extras and intentionally excluded from this MVP.
+- AI helped with requirement extraction, architecture review, traceability, and prose drafting. The engineer selected the scope, inspected the implementation, made the security decisions, and owns the accepted changes; AI output is not evidence.
 
-## Trade-offs and excluded scope
+## Creator
 
-- One default room per owner keeps the deadline model small; multiple rooms would need an explicit
-  default-room choice and removal of the temporary owner uniqueness invariant.
-- Tombstones and cleanup-job records remain as the recoverable deadline-build boundary; production
-  needs a reviewed retention/purge policy.
-- Search and file versioning are optional assignment extras and are intentionally not implemented or
-  claimed.
-- Signed-read revocation has a disclosed residual TTL because provider-issued URLs are bearer
-  capabilities.
+Built and submitted by **Yevgeniy Sorokin**.
+
+<a href="https://github.com/ewgenij87snwork" aria-label="Yevgeniy Sorokin on GitHub"><img src="https://img.shields.io/badge/GitHub-ewgenij87snwork-111827?logo=github&logoColor=white" alt="GitHub: ewgenij87snwork"></a>
+<a href="https://www.linkedin.com/in/yevgeniy-sorokin-829b7b18a/" aria-label="Yevgeniy Sorokin on LinkedIn"><img src="https://img.shields.io/badge/LinkedIn-Yevgeniy%20Sorokin-0A66C2?logo=linkedin&logoColor=white" alt="LinkedIn: Yevgeniy Sorokin"></a>
 
 ## License
 

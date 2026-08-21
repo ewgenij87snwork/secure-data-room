@@ -1,5 +1,6 @@
 import { FolderRoot, ShieldCheck } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
+import { CreatorSignature } from './creator-signature.js';
 
 export function WorkspaceSidebar({
   roomName,
@@ -28,6 +29,7 @@ export function WorkspaceSidebar({
         </NavLink>
       </nav>
       <p className="workspace-sidebar__assurance">Private by default. Shared deliberately.</p>
+      <CreatorSignature />
     </div>
   );
 }

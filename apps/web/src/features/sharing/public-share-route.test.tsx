@@ -88,5 +88,6 @@ describe('PublicShareRoute folder loading state', () => {
     expect(
       screen.queryByText('The owner has not added anything here yet.'),
     ).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Yevgeniy Sorokin profiles')).toBeVisible();
   });
 });

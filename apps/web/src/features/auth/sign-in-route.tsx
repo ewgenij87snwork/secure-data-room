@@ -1,4 +1,5 @@
 import { useLocation } from 'react-router-dom';
+import { CreatorSignature } from '../data-room/components/creator-signature.js';
 import { useAuth } from './auth-context.js';
 import { getSafeIntendedRoute, isSafeIntendedRoute } from './intended-route.js';
 
@@ -67,6 +68,7 @@ export function SignInRoute(): React.JSX.Element {
           every request.
         </p>
       </section>
+      <CreatorSignature className="creator-signature--light" />
     </main>
   );
 }

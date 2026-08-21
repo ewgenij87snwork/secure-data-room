@@ -639,6 +639,83 @@ body {
   text-align: left;
 }
 
+.creator-signature {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: auto 8px 0;
+  padding-top: 18px;
+  border-top: 1px solid hsl(var(--sidebar-foreground) / 0.12);
+  color: hsl(var(--sidebar-foreground) / 0.52);
+  font-size: 0.68rem;
+  font-style: normal;
+  letter-spacing: 0.01em;
+}
+
+.creator-signature__name {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.creator-signature__links {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.creator-signature__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: hsl(var(--sidebar-foreground) / 0.6);
+  transition:
+    color 180ms ease-out,
+    background-color 180ms ease-out;
+}
+
+.creator-signature__link:hover {
+  color: hsl(var(--sidebar-foreground));
+  background: hsl(var(--sidebar-foreground) / 0.09);
+}
+
+.auth-shell > .creator-signature--light {
+  position: absolute;
+  right: clamp(32px, 7vw, 104px);
+  bottom: 26px;
+  width: min(340px, calc(50% - 64px));
+  border-top-color: hsl(var(--border) / 0.8);
+  color: hsl(var(--muted-foreground));
+}
+
+.creator-signature--light .creator-signature__link {
+  color: hsl(var(--muted-foreground));
+}
+
+.creator-signature--light .creator-signature__link:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted));
+}
+
+.creator-signature--public {
+  width: min(340px, 100%);
+  margin: clamp(48px, 10vh, 96px) 0 0;
+  border-top-color: hsl(var(--border));
+  color: hsl(var(--muted-foreground));
+}
+
+.creator-signature--public .creator-signature__link {
+  color: hsl(var(--muted-foreground));
+}
+
+.creator-signature--public .creator-signature__link:hover {
+  color: hsl(var(--foreground));
+  background: hsl(var(--muted));
+}
+
 .workspace-header {
   min-height: 67px;
   padding: 0 clamp(20px, 3.5vw, 48px);
@@ -2556,8 +2633,16 @@ body {
   }
 
   .workspace-sidebar__room,
-  .workspace-sidebar__assurance {
+  .workspace-sidebar__assurance,
+  .creator-signature {
     display: none;
+  }
+
+  .auth-shell > .creator-signature--light {
+    display: flex;
+    position: static;
+    width: auto;
+    margin: 0 24px 24px;
   }
 
   .workspace-nav-link {
