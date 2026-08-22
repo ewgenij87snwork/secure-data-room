@@ -10,15 +10,7 @@
 **[Open the live demo](https://secure-data-room-web.vercel.app)** · [Check API health](https://secure-data-room-api.vercel.app/v1/health/ready) · [View source](https://github.com/ewgenij87snwork/secure-data-room)
 
 <p align="center">
-  <picture>
-    <source media="(prefers-reduced-motion: no-preference)" srcset="assets/readme/secure-data-room-demo.gif">
-    <img src="assets/readme/secure-data-room-demo.jpg" alt="Secure Data Room reviewer tour: private workspace, multi-PDF upload, scoped sharing, and PDF review" width="900">
-  </picture>
-</p>
-
-<p align="center">
-  <a href="assets/readme/secure-data-room-demo-master.mp4">Open the 1440×1080 master walkthrough</a> ·
-  <a href="video/README.md">See how the demo was produced</a>
+  <img src="assets/readme/secure-data-room-demo.gif" alt="Secure Data Room reviewer tour: private workspace, multi-PDF upload, scoped sharing, and PDF review" width="900">
 </p>
 
 The Web and API expose their build identity and are promoted from one verified commit.
@@ -32,7 +24,7 @@ The Web and API expose their build identity and are promoted from one verified c
 5. Open the shared scope in another browser to confirm the read-only boundary.
 6. Revoke access from the same Share dialog and verify that the link stops resolving.
 
-The 30-second hero uses real application captures from an automated browser walkthrough, then applies a deterministic Remotion edit. It preserves the complete cause-and-effect flow: create a folder, add two PDFs, watch both uploads, grant verified read-only access, hand off the invitation, and review the shared document as the recipient. The linked master keeps every interface label readable at 1440×1080.
+The hero uses real application captures from an automated browser walkthrough, then applies a deterministic edit. It preserves the complete cause-and-effect flow: create a folder, add two PDFs, watch both uploads, grant verified read-only access, hand off the invitation, and review the shared document as the recipient.
 
 ## Why this MVP is deliberate
 

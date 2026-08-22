@@ -18,5 +18,5 @@ test-results/
 /AGENTS.md
 /source/
 /governance/
-/video/out/
+/video/
 apps/api/src/generated/prisma/
