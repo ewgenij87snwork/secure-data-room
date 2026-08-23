@@ -21,4 +21,17 @@ describe('WorkspaceShell', () => {
       'Folder access',
     );
   });
+
+  it('gives the main surface the full available width when no context panel exists', () => {
+    render(
+      <WorkspaceShell sidebar={<span>Rooms</span>} header={<span>Private workspace</span>}>
+        <h1 id="workspace-title">Shared document</h1>
+      </WorkspaceShell>,
+    );
+
+    expect(screen.getByRole('main').closest('.workspace-shell')).toHaveClass(
+      'workspace-shell--without-context',
+    );
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+  });
 });

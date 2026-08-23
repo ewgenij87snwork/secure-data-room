@@ -1,5 +1,3 @@
-import { LoaderCircle } from 'lucide-react';
-
 type DataRoomStateProps =
   | Readonly<{ kind: 'loading'; label: string }>
   | Readonly<{ kind: 'empty'; eyebrow?: string; title: string; message: string }>
@@ -13,9 +11,14 @@ type DataRoomStateProps =
 export function DataRoomState(props: DataRoomStateProps): React.JSX.Element {
   if (props.kind === 'loading') {
     return (
-      <div className="data-room-state data-room-state--loading" role="status">
-        <LoaderCircle className="spin" size={19} aria-hidden="true" />
-        {props.label}
+      <div className="data-room-state data-room-state--loading" role="status" aria-busy="true">
+        <span className="sr-only">{props.label}</span>
+        <div className="content-skeleton-table content-skeleton-table--inline" aria-hidden="true">
+          <div className="content-skeleton-table__header" />
+          <div className="content-skeleton-table__row" />
+          <div className="content-skeleton-table__row" />
+          <div className="content-skeleton-table__row" />
+        </div>
       </div>
     );
   }

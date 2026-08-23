@@ -16,12 +16,15 @@ export function WorkspaceShell({
   children,
 }: WorkspaceShellProps): React.JSX.Element {
   return (
-    <div className="workspace-shell">
+    <div className={`workspace-shell${context ? '' : ' workspace-shell--without-context'}`}>
+      <a className="skip-link" href="#workspace-main">
+        Skip to workspace content
+      </a>
       <nav className="workspace-shell__sidebar" aria-label="Workspace">
         {sidebar}
       </nav>
       <header className="workspace-shell__header">{header}</header>
-      <main className="workspace-shell__main" aria-labelledby="workspace-title">
+      <main id="workspace-main" className="workspace-shell__main" aria-labelledby="workspace-title">
         <OnlineStatus onReconnect={onReconnect} />
         {children}
       </main>

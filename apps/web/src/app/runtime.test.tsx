@@ -5,10 +5,15 @@ vi.stubEnv('VITE_API_BASE_URL', 'https://api.example.test/v1/');
 vi.stubEnv('VITE_SUPABASE_URL', 'https://project.supabase.co');
 vi.stubEnv('VITE_SUPABASE_PUBLISHABLE_KEY', 'publishable-key-1234567890');
 
+function clearStorage(storage: Storage): void {
+  const clear = Reflect.get(storage, 'clear');
+  if (typeof clear === 'function') Reflect.apply(clear, storage, []);
+}
+
 describe('RuntimeApp', () => {
   beforeEach(() => {
-    localStorage.clear();
-    sessionStorage.clear();
+    clearStorage(window.localStorage);
+    clearStorage(window.sessionStorage);
     window.history.replaceState({}, '', '/');
   });
 

@@ -32,6 +32,7 @@ export function PermissionedShareForm({
           id="share-email"
           type="email"
           required
+          autoComplete="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           placeholder="name@company.com"

@@ -29,17 +29,18 @@ function SignInProbe(): React.JSX.Element {
   return <p>{JSON.stringify({ pathname: location.pathname, state: { from } })}</p>;
 }
 
-async function renderProtected(auth: AuthContextValue) {
+async function renderProtected(auth: AuthContextValue, initialEntry = '/workspace?node=42') {
   const { ProtectedRoute } = await import('./protected-route.js');
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
       <AuthContext.Provider value={auth}>
-        <MemoryRouter initialEntries={['/workspace?node=42']}>
+        <MemoryRouter initialEntries={[initialEntry]}>
           <Routes>
             <Route path="/sign-in" element={<SignInProbe />} />
             <Route element={<ProtectedRoute />}>
               <Route path="/workspace" element={<h1>Private workspace</h1>} />
+              <Route path="/shared" element={<h1>Shared with me</h1>} />
             </Route>
           </Routes>
         </MemoryRouter>
@@ -98,12 +99,39 @@ describe('ProtectedRoute', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('uses an application-shaped skeleton while bootstrapping an authenticated workspace', async () => {
+    const pending = new Promise<Response>(() => undefined);
+    vi.stubGlobal('fetch', vi.fn().mockReturnValue(pending));
+    await renderProtected(authenticated);
+
+    expect(screen.getByTestId('workspace-boot-skeleton')).toBeVisible();
+    expect(screen.getByRole('status')).toHaveTextContent('Loading folder contents');
+    expect(screen.getByText('Secure Data Room')).toBeVisible();
+    expect(screen.getByTestId('workspace-boot-skeleton')).toHaveClass('workspace-shell');
+    expect(
+      screen.getByTestId('workspace-boot-skeleton').querySelector('.workspace-shell__context'),
+    ).toBeInTheDocument();
+  });
+
   it('preserves the intended route when redirecting an anonymous visitor', async () => {
     await renderProtected({ ...authenticated, status: 'anonymous', accessToken: null });
 
     expect(await screen.findByText(/"pathname":"\/sign-in"/)).toHaveTextContent(
       '"from":"/workspace?node=42"',
     );
+  });
+
+  it('preserves Shared with me for a recipient who has not signed in yet', async () => {
+    await renderProtected({ ...authenticated, status: 'anonymous', accessToken: null }, '/shared');
+
+    expect(await screen.findByText(/"pathname":"\/sign-in"/)).toHaveTextContent('"from":"/shared"');
+  });
+
+  it('opens Shared with me directly for an already authenticated recipient', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(bootstrapResponse(false)));
+    await renderProtected(authenticated, '/shared');
+
+    expect(await screen.findByRole('heading', { name: 'Shared with me' })).toBeVisible();
   });
 
   it('never renders protected content when an authenticated state lacks a token', async () => {

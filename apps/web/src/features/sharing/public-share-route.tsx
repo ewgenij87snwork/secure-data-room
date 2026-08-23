@@ -3,12 +3,14 @@ import { Link } from 'react-router-dom';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { usePublicShare, usePublicChildren } from './queries.js';
 import { capturePublicShareToken, clearPublicShareToken } from '../../lib/public-token.js';
-import { readPublicFileViewUrl } from './api.js';
+import { readPublicFileViewUrl, type PublicFileViewUrl } from './api.js';
 import { EmbeddedPdf } from '../pdf-viewer/components/embedded-pdf.js';
 import { ViewerState, type ViewerStateName } from '../pdf-viewer/components/viewer-state.js';
 import { ApiClientError } from '../../lib/api-error.js';
 import { NodeBrowser } from '../data-room/components/node-browser.js';
+import { CreatorSignature } from '../data-room/components/creator-signature.js';
 import { ReadOnlyBanner } from './components/read-only-banner.js';
+import { startFileDownload } from '../pdf-viewer/download-file.js';
 export function PublicShareRoute(): React.JSX.Element {
   const query = usePublicShare();
   const token = capturePublicShareToken();
@@ -28,12 +30,14 @@ export function PublicShareRoute(): React.JSX.Element {
             : 'This public link is invalid or expired.'}
         </h1>
         <p role="alert">Ask the owner for a new link.</p>
+        <CreatorSignature className="creator-signature--public" />
       </main>
     );
   if (query.isLoading || !node)
     return (
       <main className="sharing-page">
         <p role="status">Opening public link…</p>
+        <CreatorSignature className="creator-signature--public" />
       </main>
     );
   return (
@@ -48,8 +52,9 @@ export function PublicShareRoute(): React.JSX.Element {
         <NodeBrowser
           nodes={children.data?.pages.flatMap((page) => page.items) ?? []}
           canManage={false}
-          isLoading={children.isLoading}
+          isLoading={children.isLoading || !children.isSuccess}
           isError={children.isError}
+          onRetry={() => void children.refetch()}
           hasNextPage={children.hasNextPage}
           isLoadingMore={children.isFetchingNextPage}
           onLoadMore={() => void children.fetchNextPage()}
@@ -57,6 +62,10 @@ export function PublicShareRoute(): React.JSX.Element {
           onDelete={() => undefined}
           resolveDestination={() => '/share'}
           onOpen={(child) => setStack((current) => [...current, child])}
+          onDownload={async (file) => {
+            const view = await readPublicFileViewUrl(token, file.id);
+            startFileDownload(view.downloadUrl, file.name);
+          }}
         />
       ) : node.kind === 'FILE' ? (
         <PublicPdf nodeId={node.id} token={token} name={node.name} />
@@ -75,6 +84,7 @@ export function PublicShareRoute(): React.JSX.Element {
       <Link className="secondary-button" to="/sign-in" onClick={() => clearPublicShareToken()}>
         Sign in
       </Link>
+      <CreatorSignature className="creator-signature--public" />
     </main>
   );
 }
@@ -88,7 +98,7 @@ export function PublicPdf({
   token: string;
   name: string;
 }): React.JSX.Element {
-  const [view, setView] = useState<{ url: string; expiresAt: string } | null>(null);
+  const [view, setView] = useState<PublicFileViewUrl | null>(null);
   const [state, setState] = useState<ViewerStateName>('loading');
   const requestGeneration = useRef(0);
   const mounted = useRef(true);
@@ -129,9 +139,14 @@ export function PublicPdf({
   if (!view) return <ViewerState state={state} />;
   return (
     <>
-      <button className="secondary-button" type="button" onClick={load}>
-        Refresh document
-      </button>
+      <div className="public-pdf__actions">
+        <a className="primary-button" href={view.downloadUrl} download={name} rel="noreferrer">
+          Download PDF
+        </a>
+        <button className="secondary-button" type="button" onClick={load}>
+          Refresh document
+        </button>
+      </div>
       <EmbeddedPdf url={view.url} name={name} />
     </>
   );

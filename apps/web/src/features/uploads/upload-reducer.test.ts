@@ -72,4 +72,12 @@ describe('uploadReducer', () => {
       /Invalid upload transition/,
     );
   });
+
+  it('clears a previous selection error as soon as a new file selection starts', () => {
+    const withError = uploadReducer(initialUploadQueueState, {
+      type: 'intake-errors',
+      errors: ['large.pdf: PDF files must be 10 MB or smaller.'],
+    });
+    expect(uploadReducer(withError, { type: 'clear-intake-errors' }).intakeErrors).toEqual([]);
+  });
 });

@@ -14,6 +14,7 @@ import { MoveFileDialog } from './components/move-file-dialog.js';
 import { WorkspaceHeader } from './components/workspace-header.js';
 import { WorkspaceShell } from './components/workspace-shell.js';
 import { WorkspaceSidebar } from './components/workspace-sidebar.js';
+import { WorkspaceRouteSkeleton } from './components/workspace-route-skeleton.js';
 import type { DataRoomOutletContext } from './data-room-context.js';
 import { useNode, useNodeBreadcrumbs, useNodeChildren } from './data-room-queries.js';
 import { UploadDropzone } from '../uploads/components/upload-dropzone.js';
@@ -21,6 +22,8 @@ import { useOptionalUploadQueue } from '../uploads/upload-queue-context.js';
 import { shouldShowUploadDropzone } from './data-room-upload-visibility.js';
 import { useOnlineStatus } from '../../lib/online-status-hook.js';
 import { ShareDialog } from '../sharing/components/share-dialog.js';
+import { readFileViewUrl } from './data-room-api.js';
+import { startFileDownload } from '../pdf-viewer/download-file.js';
 
 interface SelectedNode {
   node: NodeSummary;
@@ -34,6 +37,7 @@ export function DataRoomRoute(): React.JSX.Element {
   const queue = useOptionalUploadQueue();
   const isOnline = useOnlineStatus();
   const addFiles = queue?.addFiles;
+  const clearIntakeErrors = queue?.clearIntakeErrors;
   const resolvedNodeId = nodeId ?? bootstrap.room.rootNodeId;
   const nodeQuery = useNode(resolvedNodeId);
   const breadcrumbsQuery = useNodeBreadcrumbs(resolvedNodeId);
@@ -43,7 +47,7 @@ export function DataRoomRoute(): React.JSX.Element {
   const [renameTarget, setRenameTarget] = useState<SelectedNode | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<SelectedNode | null>(null);
   const [moveTarget, setMoveTarget] = useState<SelectedNode | null>(null);
-  const [shareReturnFocus, setShareReturnFocus] = useState<HTMLButtonElement | null>(null);
+  const [shareTarget, setShareTarget] = useState<SelectedNode | null>(null);
   const accountLabel = bootstrap.user.displayName ?? bootstrap.user.email;
   const currentNode = nodeQuery.data;
   const canManage = currentNode?.accessRole === 'OWNER' && !bootstrap.runtime.maintenanceMode;
@@ -76,13 +80,7 @@ export function DataRoomRoute(): React.JSX.Element {
   );
 
   if (nodeQuery.isLoading) {
-    return shell(
-      <section className="workspace-state" aria-labelledby="workspace-title">
-        <p className="eyebrow">Document room</p>
-        <h1 id="workspace-title">Opening secure folder…</h1>
-        <p role="status">Loading its current access and contents.</p>
-      </section>,
-    );
+    return shell(<WorkspaceRouteSkeleton />);
   }
 
   if (!currentNode || terminalNodeError) {
@@ -132,7 +130,9 @@ export function DataRoomRoute(): React.JSX.Element {
             <FolderToolbar
               canManage={canMutate}
               onCreateFolder={setCreateReturnFocus}
-              onShare={setShareReturnFocus}
+              onShare={(returnFocusElement) =>
+                setShareTarget({ node: currentNode, returnFocusElement })
+              }
               showCreateFolder={isFolder}
             />
           ) : null}
@@ -168,6 +168,12 @@ export function DataRoomRoute(): React.JSX.Element {
             onRename={(node, returnFocusElement) => setRenameTarget({ node, returnFocusElement })}
             onDelete={(node, returnFocusElement) => setDeleteTarget({ node, returnFocusElement })}
             onMove={(node, returnFocusElement) => setMoveTarget({ node, returnFocusElement })}
+            onShare={(node, returnFocusElement) => setShareTarget({ node, returnFocusElement })}
+            onDownload={async (file) => {
+              if (!auth.accessToken) throw new Error('An authenticated session is required.');
+              const view = await readFileViewUrl(auth.accessToken, file.id);
+              startFileDownload(view.downloadUrl, file.name);
+            }}
           />
         ) : (
           <section className="document-summary" aria-label="Document summary">
@@ -179,6 +185,7 @@ export function DataRoomRoute(): React.JSX.Element {
         {canUpload && isOnline ? (
           <UploadDropzone
             disabled={!auth.accessToken || !addFiles}
+            {...(clearIntakeErrors ? { onPickerOpen: clearIntakeErrors } : {})}
             onFilesSelected={(files) => {
               if (addFiles) void addFiles(currentNode.id, files);
             }}
@@ -230,14 +237,15 @@ export function DataRoomRoute(): React.JSX.Element {
           returnFocusElement={moveTarget.returnFocusElement}
         />
       ) : null}
-      {shareReturnFocus && canMutate ? (
+      {shareTarget && canMutate ? (
         <ShareDialog
-          node={currentNode}
+          key={shareTarget.node.id}
+          node={shareTarget.node}
           open
           onOpenChange={(open) => {
-            if (!open) setShareReturnFocus(null);
+            if (!open) setShareTarget(null);
           }}
-          returnFocusElement={shareReturnFocus}
+          returnFocusElement={shareTarget.returnFocusElement}
         />
       ) : null}
     </>,

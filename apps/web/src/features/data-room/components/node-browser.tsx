@@ -17,8 +17,10 @@ export function NodeBrowser({
   onRename,
   onDelete,
   onMove,
+  onShare,
   resolveDestination,
   onOpen,
+  onDownload,
 }: Readonly<{
   nodes: readonly NodeSummary[];
   canManage: boolean;
@@ -32,8 +34,10 @@ export function NodeBrowser({
   onRename: (node: NodeSummary, returnFocusElement: HTMLElement | null) => void;
   onDelete: (node: NodeSummary, returnFocusElement: HTMLElement | null) => void;
   onMove?: (node: NodeSummary, returnFocusElement: HTMLElement | null) => void;
+  onShare?: ((node: NodeSummary, returnFocusElement: HTMLElement | null) => void) | undefined;
   resolveDestination?: (node: NodeSummary) => string;
   onOpen?: (node: NodeSummary) => void;
+  onDownload?: (node: NodeSummary) => Promise<void>;
 }>): React.JSX.Element {
   const items = nodes.map((node) => toNodeViewModel(node, canManage));
 
@@ -88,16 +92,20 @@ export function NodeBrowser({
         onRename={onRename}
         onDelete={onDelete}
         onMove={onMove}
+        onShare={onShare}
         resolveDestination={resolveDestination}
         onOpen={onOpen}
+        onDownload={onDownload}
       />
       <NodeCardList
         items={items}
         onRename={onRename}
         onDelete={onDelete}
         onMove={onMove}
+        onShare={onShare}
         resolveDestination={resolveDestination}
         onOpen={onOpen}
+        onDownload={onDownload}
       />
       {hasNextPage ? (
         <button

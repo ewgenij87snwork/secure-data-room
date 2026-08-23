@@ -109,6 +109,7 @@ describe('data room API boundary', () => {
       .mockResolvedValueOnce(
         jsonResponse({
           url: 'https://storage.example.test/signed',
+          downloadUrl: 'https://storage.example.test/signed-download',
           expiresAt: '2026-01-01T01:00:00.000Z',
         }),
       );

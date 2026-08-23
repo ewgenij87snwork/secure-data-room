@@ -18,6 +18,7 @@ export type UploadAction =
   | { type: 'retry'; clientId: string }
   | { type: 'cancelled'; clientId: string }
   | { type: 'clear' }
+  | { type: 'clear-intake-errors' }
   | { type: 'intake-errors'; errors: readonly string[] };
 
 const transitions: Record<UploadItem['state'], readonly UploadItem['state'][]> = {
@@ -139,6 +140,8 @@ export function uploadReducer(state: UploadQueueState, action: UploadAction): Up
       }));
     case 'clear':
       return initialUploadQueueState;
+    case 'clear-intake-errors':
+      return { ...state, intakeErrors: [] };
     case 'intake-errors':
       return { ...state, intakeErrors: action.errors };
   }

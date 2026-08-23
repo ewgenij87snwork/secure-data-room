@@ -41,6 +41,7 @@ describe('sharing API', () => {
   it('posts public PDF view requests with the share token transport', async () => {
     apiRequestMock.mockResolvedValueOnce({
       url: 'https://cdn.test/file.pdf',
+      downloadUrl: 'https://cdn.test/file-download.pdf',
       expiresAt: '2026-08-20T12:00:00.000Z',
     });
     await readPublicFileViewUrl(

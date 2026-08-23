@@ -8,6 +8,7 @@ import { PdfViewerRoute } from '../features/pdf-viewer/pdf-viewer-route.js';
 import { PublicShareRoute } from '../features/sharing/public-share-route.js';
 import { SharedNodeRoute } from '../features/sharing/shared-node-route.js';
 import { SharedWithMeRoute } from '../features/sharing/shared-with-me-route.js';
+import { SharedWorkspaceLayout } from '../features/sharing/shared-workspace-layout.js';
 
 export function AppRoutes(): React.JSX.Element {
   return (
@@ -16,11 +17,13 @@ export function AppRoutes(): React.JSX.Element {
       <Route path="/auth/callback" element={<AuthCallbackRoute />} />
       <Route path="/share" element={<PublicShareRoute />} />
       <Route element={<ProtectedRoute />}>
-        <Route path="/files/:nodeId" element={<PdfViewerRoute />} />
         <Route path="/workspace" element={<WorkspaceIndexRoute />} />
         <Route path="/workspace/:nodeId" element={<DataRoomRoute />} />
-        <Route path="/shared" element={<SharedWithMeRoute />} />
-        <Route path="/shared/:nodeId" element={<SharedNodeRoute />} />
+        <Route element={<SharedWorkspaceLayout />}>
+          <Route path="/files/:nodeId" element={<PdfViewerRoute />} />
+          <Route path="/shared" element={<SharedWithMeRoute />} />
+          <Route path="/shared/:nodeId" element={<SharedNodeRoute />} />
+        </Route>
         <Route path="/" element={<Navigate to="/workspace" replace />} />
         <Route path="*" element={<Navigate to="/workspace" replace />} />
       </Route>

@@ -52,6 +52,32 @@ describe('DataRoomRoute', () => {
     vi.unstubAllGlobals();
   });
 
+  it('keeps the workspace shell geometry while the first folder request is pending', async () => {
+    const pending = deferred<Response>();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>().mockImplementation(() => pending.promise),
+    );
+
+    await renderRoute();
+
+    expect(screen.getByTestId('workspace-route-skeleton')).toBeVisible();
+    expect(screen.getByRole('status')).toHaveTextContent('Loading folder contents');
+    expect(
+      screen.queryByRole('heading', { name: 'Opening secure folder…' }),
+    ).not.toBeInTheDocument();
+
+    pending.resolve(
+      routeResponse(
+        new URL(`https://api.example.test/v1/nodes/${rootId}`),
+        node({ id: rootId, parentId: null, name: 'Due diligence' }),
+        [],
+      ),
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Due diligence' })).toBeVisible();
+  });
+
   it('renders an owner folder, preserves API order, and appends the next cursor page', async () => {
     const current = node({ id: rootId, parentId: null, name: 'Due diligence' });
     const folder = node({ id: folderId, name: 'Contracts' });
@@ -93,6 +119,37 @@ describe('DataRoomRoute', () => {
 
     expect(await within(screen.getByRole('table')).findByText('Board minutes.pdf')).toBeVisible();
     expect(within(screen.getByRole('table')).getAllByRole('row')).toHaveLength(3);
+  });
+
+  it('keeps the current workspace content stable while a first-time folder navigation loads', async () => {
+    const root = node({ id: rootId, parentId: null, name: 'Due diligence' });
+    const destination = node({ id: folderId, parentId: rootId, name: 'Contracts' });
+    const destinationRequest = deferred<Response>();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: RequestInfo | URL) => {
+        const url = requestUrl(input);
+        if (url.pathname.includes(folderId)) return destinationRequest.promise;
+        return routeResponse(input, root, [destination]);
+      }),
+    );
+
+    await renderRoute();
+    expect(await screen.findByRole('heading', { name: 'Due diligence' })).toBeVisible();
+
+    const table = await screen.findByRole('table');
+    const destinationLink = within(table).getByRole('link', { name: 'Contracts' });
+    await userEvent.click(destinationLink);
+
+    expect(screen.getByRole('heading', { name: 'Due diligence' })).toBeVisible();
+    expect(screen.queryByTestId('workspace-route-skeleton')).not.toBeInTheDocument();
+    expect(screen.getByText('Folder context')).toBeVisible();
+
+    destinationRequest.resolve(
+      routeResponse(new URL(`https://api.example.test/v1/nodes/${folderId}`), destination, []),
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Contracts' })).toBeVisible();
   });
 
   it('renders a viewer as read-only with owner controls absent', async () => {
@@ -286,17 +343,15 @@ function routeResponse(
   input: RequestInfo | URL,
   current: NodeSummary,
   children: NodeSummary[],
-): Promise<Response> {
+): Response {
   const url = requestUrl(input);
   if (url.pathname.endsWith(`/nodes/${current.id}/breadcrumbs`)) {
-    return Promise.resolve(jsonResponse({ items: [{ id: current.id, name: current.name }] }));
+    return jsonResponse({ items: [{ id: current.id, name: current.name }] });
   }
   if (url.pathname.endsWith(`/nodes/${current.id}/children`)) {
-    return Promise.resolve(
-      jsonResponse({ items: children, pageInfo: { nextCursor: null, hasNextPage: false } }),
-    );
+    return jsonResponse({ items: children, pageInfo: { nextCursor: null, hasNextPage: false } });
   }
-  return Promise.resolve(jsonResponse(current));
+  return jsonResponse(current);
 }
 
 function requestUrl(input: RequestInfo | URL): URL {
@@ -306,6 +361,14 @@ function requestUrl(input: RequestInfo | URL): URL {
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status });
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
 }
 
 function node(overrides: Partial<NodeSummary>): NodeSummary {

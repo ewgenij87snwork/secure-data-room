@@ -38,16 +38,19 @@ export function ActiveShareList({
       ) : shares.length === 0 ? (
         <p>No active shares.</p>
       ) : (
-        <ul className="active-share-list">
+        <ul className="active-share-list" aria-label="Active access grants">
           {shares
             .filter((share) => !share.revokedAt)
-            .map((share) => (
-              <li key={share.id}>
-                <div>
+            .map((share, index) => (
+              <li className="active-share-list__item" key={share.id}>
+                <div className="active-share-list__identity">
                   <strong>
                     {share.principalType === 'PUBLIC_LINK' ? 'Public link' : share.recipientEmail}
                   </strong>
-                  <span>{share.targetName} · View only</span>
+                  <span>
+                    {share.principalType === 'PUBLIC_LINK' ? `Link ${index + 1} · ` : ''}
+                    {share.targetName} · View only
+                  </span>
                 </div>
                 <button
                   className="quiet-danger-button"

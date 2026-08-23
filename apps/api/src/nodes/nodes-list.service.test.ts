@@ -88,6 +88,27 @@ describe('NodesListService', () => {
     expect(Object.isFrozen(result.pageInfo)).toBe(true);
   });
 
+  it('marks an owner row as shared when it has an active access grant', async () => {
+    const policy = {
+      assertCanReadNode: vi.fn().mockResolvedValue({ ...access, accessRole: 'OWNER' }),
+    };
+    const database = {
+      $queryRaw: vi
+        .fn()
+        .mockResolvedValue([
+          { ...row('44444444-4444-4444-8444-444444444444', 'Shared.pdf'), hasActiveShare: true },
+        ]),
+    };
+
+    const result = await new NodesListService(database as never, policy as never).listChildren(
+      principal,
+      parent,
+      { limit: 50 },
+    );
+
+    expect(result.items[0]).toMatchObject({ isShared: true, accessRole: 'OWNER' });
+  });
+
   it('returns a final page without a cursor', async () => {
     const policy = { assertCanReadNode: vi.fn().mockResolvedValue(access) };
     const database = {

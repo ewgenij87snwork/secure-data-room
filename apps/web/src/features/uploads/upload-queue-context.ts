@@ -4,6 +4,7 @@ import type { UploadQueueState } from './upload-types.js';
 export interface QueueContextValue {
   state: UploadQueueState;
   addFiles: (parentId: string, files: readonly File[]) => Promise<void>;
+  clearIntakeErrors: () => void;
   retry: (clientId: string) => void;
   cancel: (clientId: string) => void;
 }
