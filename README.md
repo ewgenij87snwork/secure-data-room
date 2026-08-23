@@ -13,7 +13,9 @@
   <img src="assets/readme/secure-data-room-demo.gif" alt="Secure Data Room reviewer tour: private workspace, multi-PDF upload, scoped sharing, and PDF review" width="900">
 </p>
 
-The Web and API expose their build identity and are promoted from one verified commit.
+The live Web and API expose matching build identities. At this PR checkpoint, production still
+serves the previous verified application commit; this README and demo update remain branch-only until
+merge and redeploy.
 
 ## A two-minute reviewer tour
 
@@ -24,7 +26,7 @@ The Web and API expose their build identity and are promoted from one verified c
 5. Open the shared scope in another browser to confirm the read-only boundary.
 6. Revoke access from the same Share dialog and verify that the link stops resolving.
 
-The hero uses real application captures from an automated browser walkthrough, then applies a deterministic edit. It preserves the complete cause-and-effect flow: create a folder, add two PDFs, watch both uploads, grant verified read-only access, hand off the invitation, and review the shared document as the recipient.
+The hero is a deterministic reviewer tour built from anonymized application captures. It illustrates the reviewer flow: create a folder, add two PDFs, watch both uploads, grant read-only access, hand off the invitation, and review the shared document as the recipient. Editable capture and render sources live in the separate video-production repository; this product repository contains only the optimized delivery GIF.
 
 ## Why this MVP is deliberate
 
@@ -96,6 +98,14 @@ Source of truth: [`prisma/schema.prisma`](prisma/schema.prisma).
 
 Prerequisites: Node.js 24.x, Corepack, pnpm 11.17.0, and a disposable PostgreSQL/Supabase development database.
 
+Google sign-in is an external prerequisite with two distinct callback configurations:
+
+1. In Google Cloud, add the exact Supabase provider callback shown by Supabase as an Authorized
+   redirect URI (normally `https://<project-ref>.supabase.co/auth/v1/callback`).
+2. In Supabase URL Configuration, set the matching Site URL and allow
+   `http://localhost:5173/auth/callback` plus `<deployed-web-origin>/auth/callback` in the redirect
+   allowlist.
+
 ```bash
 corepack enable
 corepack prepare pnpm@11.17.0 --activate
@@ -109,6 +119,11 @@ pnpm dev
 ```
 
 Local Web is `http://localhost:5173`, API is `http://localhost:3000/v1`, and Swagger is `http://localhost:3000/docs`. Keep server-only credentials out of `VITE_*`.
+
+`.env.example` groups shared identity/deployment metadata, API-runtime settings, browser-safe
+`VITE_*` settings, and local/release operations. Only `VITE_API_BASE_URL`, `VITE_SUPABASE_URL`,
+`VITE_SUPABASE_PUBLISHABLE_KEY`, and `VITE_BUILD_SHA` belong in browser configuration. Keep
+API-runtime and local/release values server/tooling-only; never copy them into `VITE_*`.
 
 ## Verification
 
@@ -128,12 +143,16 @@ pnpm deployment:sha:check -- \
   --api-url https://secure-data-room-api.vercel.app
 ```
 
+This command proves that the two live services report the same commit; it does not prove that
+production already contains the current PR. Compare the printed SHA with `git rev-parse HEAD` when
+certifying a release.
+
 ## Deliberate trade-offs
 
 - One default room per owner keeps the deadline model small; multiple rooms would need an explicit default-room choice.
 - Tombstones and cleanup-job records are the recoverable deadline-build boundary; production needs a reviewed retention and purge policy.
 - Search and file versioning are optional assignment extras and intentionally excluded from this MVP.
-- Codex helped with requirement extraction, implementation, adversarial review, traceability, and documentation. Playwright captured real browser states; Remotion and FFmpeg produced the deterministic reviewer tour. The engineer selected the scope, inspected the implementation, made the security decisions, and owns every accepted change; AI output is not treated as evidence.
+- Codex helped with requirement extraction, implementation, adversarial review, traceability, and documentation. Playwright suites define the browser journeys, and `pnpm verify` checks their discovery; full deployed execution of all 11 production journeys remains pending. Remotion and FFmpeg assembled the deterministic reviewer tour from anonymized captures. The engineer selected the scope, inspected the implementation, made the security decisions, and owns every accepted change; AI output is not treated as evidence.
 
 ## Creator
 
