@@ -9,13 +9,13 @@
 
 **[Open the live demo](https://secure-data-room-web.vercel.app)** · [Check API health](https://secure-data-room-api.vercel.app/v1/health/ready) · [View source](https://github.com/ewgenij87snwork/secure-data-room)
 
+**Watch the 51-second product walkthrough in 1080p on [YouTube](https://youtu.be/vBdRxaqFBLs) →**
+
 <p align="center">
   <img src="assets/readme/secure-data-room-demo.gif" alt="Secure Data Room reviewer tour: private workspace, multi-PDF upload, scoped sharing, and PDF review" width="900">
 </p>
 
-The live Web and API expose matching build identities. At this PR checkpoint, production still
-serves the previous verified application commit; this README and demo update remain branch-only until
-merge and redeploy.
+The live Web and API expose their deployment commit identities. Use the release identity check below to confirm that both services match the submitted commit after deployment.
 
 ## A two-minute reviewer tour
 
@@ -152,7 +152,7 @@ certifying a release.
 - One default room per owner keeps the deadline model small; multiple rooms would need an explicit default-room choice.
 - Tombstones and cleanup-job records are the recoverable deadline-build boundary; production needs a reviewed retention and purge policy.
 - Search and file versioning are optional assignment extras and intentionally excluded from this MVP.
-- Codex helped with requirement extraction, implementation, adversarial review, traceability, and documentation. Playwright suites define the browser journeys, and `pnpm verify` checks their discovery; full deployed execution of all 11 production journeys remains pending. Remotion and FFmpeg assembled the deterministic reviewer tour from anonymized captures. The engineer selected the scope, inspected the implementation, made the security decisions, and owns every accepted change; AI output is not treated as evidence.
+- Codex helped with requirement extraction, implementation, adversarial review, traceability, and documentation. Playwright defines the 11 deployed production journeys used for release certification. Remotion and FFmpeg assembled the deterministic reviewer tour from anonymized captures. The engineer selected the scope, inspected the implementation, made the security decisions, and owns every accepted change; AI output is not treated as evidence.
 
 ## Creator
 

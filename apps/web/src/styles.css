@@ -2551,6 +2551,13 @@ body {
     grid-template-rows: 64px minmax(0, 1fr);
   }
 
+  .workspace-shell--without-context {
+    grid-template-areas:
+      'sidebar header'
+      'sidebar main';
+    grid-template-columns: 240px minmax(0, 1fr);
+  }
+
   .workspace-shell__context {
     border-top: 0;
     border-left: 1px solid hsl(var(--border));

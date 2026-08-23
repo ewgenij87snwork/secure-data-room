@@ -16,7 +16,7 @@ export function WorkspaceShell({
   children,
 }: WorkspaceShellProps): React.JSX.Element {
   return (
-    <div className="workspace-shell">
+    <div className={`workspace-shell${context ? '' : ' workspace-shell--without-context'}`}>
       <a className="skip-link" href="#workspace-main">
         Skip to workspace content
       </a>
