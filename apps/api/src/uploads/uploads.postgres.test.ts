@@ -30,6 +30,7 @@ run('UploadsService PostgreSQL integration', () => {
     await admin.query(`
       CREATE TYPE "NodeKind" AS ENUM ('FOLDER', 'FILE');
       CREATE TYPE "UploadStatus" AS ENUM ('PREPARED', 'UPLOADING', 'FINALIZED', 'CANCELLED', 'EXPIRED', 'REJECTED');
+      CREATE TYPE "CleanupStatus" AS ENUM ('PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED');
       CREATE TABLE "UserProfile" ("id" uuid PRIMARY KEY, "email" text NOT NULL, "createdAt" timestamptz NOT NULL DEFAULT now(), "updatedAt" timestamptz NOT NULL DEFAULT now());
       CREATE TABLE "DataRoom" ("id" uuid PRIMARY KEY, "ownerId" uuid NOT NULL, "name" varchar(120) NOT NULL, "createdAt" timestamptz NOT NULL DEFAULT now(), "updatedAt" timestamptz NOT NULL DEFAULT now());
       CREATE TABLE "Node" (
@@ -44,6 +45,12 @@ run('UploadsService PostgreSQL integration', () => {
         "normalizedName" varchar(120) NOT NULL, "expectedSizeBytes" bigint NOT NULL, "mimeType" varchar(100) NOT NULL,
         "status" "UploadStatus" NOT NULL DEFAULT 'PREPARED', "expiresAt" timestamptz NOT NULL, "finalizedAt" timestamptz,
         "fileNodeId" uuid UNIQUE, "createdAt" timestamptz NOT NULL DEFAULT now(), "updatedAt" timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE TABLE "StorageCleanupJob" (
+        "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(), "rootNodeId" uuid NOT NULL UNIQUE,
+        "status" "CleanupStatus" NOT NULL DEFAULT 'PENDING', "attempts" integer NOT NULL DEFAULT 0,
+        "nextAttemptAt" timestamptz NOT NULL DEFAULT now(), "lastErrorCode" varchar(80),
+        "createdAt" timestamptz NOT NULL DEFAULT now(), "updatedAt" timestamptz NOT NULL DEFAULT now()
       );
       CREATE TABLE "RuntimeControl" ("id" integer PRIMARY KEY DEFAULT 1, "registrationOpen" boolean NOT NULL DEFAULT false, "uploadsEnabled" boolean NOT NULL DEFAULT true, "publicLinksEnabled" boolean NOT NULL DEFAULT false, "maintenanceMode" boolean NOT NULL DEFAULT false, "updatedAt" timestamptz NOT NULL DEFAULT now());
       CREATE UNIQUE INDEX "UploadSession_ownerId_clientId_key" ON "UploadSession" ("ownerId", "clientId");
