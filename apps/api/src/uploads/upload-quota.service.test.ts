@@ -5,8 +5,14 @@ import {
   MAX_ACTIVE_FILES,
   MAX_ACTIVE_UPLOAD_SESSIONS,
   MAX_FINALIZED_BYTES,
+  MAX_GLOBAL_STORAGE_BYTES,
+  MAX_PROVIDER_OBJECT_BYTES,
   UploadQuotaService,
 } from './upload-quota.service.js';
+
+interface SqlTemplate {
+  strings: readonly string[];
+}
 
 function transactionRow(values: {
   activeSessions: number;
@@ -47,6 +53,102 @@ describe('UploadQuotaService', () => {
         24,
       ),
     ).resolves.toBeUndefined();
+  });
+
+  it('restores the intended 50 MiB per-owner finalized-byte limit', () => {
+    expect(MAX_FINALIZED_BYTES).toBe(50 * 1024 * 1024);
+  });
+
+  it('rejects a batch that would exceed the global physical storage cap', async () => {
+    const query = vi.fn<(sql: SqlTemplate) => Promise<unknown>>().mockResolvedValue([
+      {
+        activeSessions: 0,
+        reservedBytes: 0,
+        finalizedBytes: 0,
+        activeFiles: 0,
+        globalStorageBytes: MAX_GLOBAL_STORAGE_BYTES - 1,
+      },
+    ]);
+
+    await expect(
+      new UploadQuotaService().assertBatchFits(
+        { $queryRaw: query } as never,
+        '11111111-1111-4111-8111-111111111111',
+        1,
+        2,
+      ),
+    ).rejects.toMatchObject({ response: { error: { code: 'QUOTA_EXCEEDED' } } });
+  });
+
+  it('serializes global accounting through the runtime-control singleton row', async () => {
+    const query = vi.fn<(sql: SqlTemplate) => Promise<unknown>>().mockResolvedValue([
+      {
+        activeSessions: 0,
+        reservedBytes: 0,
+        finalizedBytes: 0,
+        activeFiles: 0,
+        globalStorageBytes: 0,
+      },
+    ]);
+
+    await new UploadQuotaService().assertBatchFits(
+      { $queryRaw: query } as never,
+      '11111111-1111-4111-8111-111111111111',
+      1,
+      2,
+    );
+    expect(query.mock.calls[0]?.[0]?.strings.join('')).toContain(
+      'FROM "RuntimeControl" WHERE id = 1 FOR UPDATE',
+    );
+  });
+
+  it('accounts for unfinalized sessions and tombstoned file nodes globally', async () => {
+    const query = vi.fn<(sql: SqlTemplate) => Promise<unknown>>().mockResolvedValue([
+      {
+        activeSessions: 0,
+        reservedBytes: 0,
+        finalizedBytes: 0,
+        activeFiles: 0,
+        globalStorageBytes: 0,
+      },
+    ]);
+
+    await new UploadQuotaService().assertBatchFits(
+      { $queryRaw: query } as never,
+      '11111111-1111-4111-8111-111111111111',
+      1,
+      2,
+    );
+    const sql = query.mock.calls[0]?.[0]?.strings.join('') ?? '';
+    expect(sql).toContain('FROM "UploadSession"');
+    expect(sql).toContain('FROM "Node" n');
+    expect(sql).toContain('FROM "Node" WHERE kind = \'FILE\'');
+    expect(sql).toContain('GREATEST("expectedSizeBytes"');
+    expect(sql).toContain('"StorageCleanupJob"');
+    expect(sql).toContain('parent.depth < ');
+    expect(sql).toContain('NOT child."id" = ANY(parent.path)');
+    expect(sql).toContain('child."dataRoomId" = parent."dataRoomId"');
+  });
+
+  it('reserves at least one provider-sized object for tiny unfinalized uploads', async () => {
+    const query = vi.fn().mockResolvedValue([
+      {
+        activeSessions: 0,
+        reservedBytes: 0,
+        finalizedBytes: 0,
+        activeFiles: 0,
+        globalStorageBytes: MAX_GLOBAL_STORAGE_BYTES - MAX_PROVIDER_OBJECT_BYTES + 1,
+      },
+    ]);
+
+    await expect(
+      new UploadQuotaService().assertBatchFits(
+        { $queryRaw: query } as never,
+        '11111111-1111-4111-8111-111111111111',
+        1,
+        1,
+      ),
+    ).rejects.toMatchObject({ response: { error: { code: 'QUOTA_EXCEEDED' } } });
   });
 
   it('uses a typed domain exception rather than an error message', async () => {
