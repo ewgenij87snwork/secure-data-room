@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import { CleanupService, retryDelayMs } from './cleanup.service.js';
 
+interface SqlTemplate {
+  strings: readonly string[];
+}
+
 const jobId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const rootNodeId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
@@ -10,6 +14,7 @@ function harness() {
       findMany: vi.fn().mockResolvedValue([{ id: jobId, rootNodeId, attempts: 0 }]),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
+    $executeRaw: vi.fn().mockResolvedValue(2),
     $queryRaw: vi.fn().mockResolvedValue([
       { storageKey: 'rooms/r/objects/a', rootExists: true, traversalComplete: true },
       { storageKey: 'rooms/r/objects/b', rootExists: true, traversalComplete: true },
@@ -185,5 +190,92 @@ describe('CleanupService', () => {
 
   it('caps retry backoff at one hour', () => {
     expect(retryDelayMs(1000)).toBe(60 * 60 * 1000);
+  });
+
+  it('deletes abandoned upload objects only after provider removal succeeds', async () => {
+    const h = harness();
+    const uploadSession = {
+      findMany: vi
+        .fn()
+        .mockResolvedValue([
+          { id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', storageKey: 'rooms/r/objects/expired' },
+        ]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
+    };
+    (h.database as typeof h.database & { uploadSession: typeof uploadSession }).uploadSession =
+      uploadSession;
+    const executeRaw = vi.fn<(sql: SqlTemplate) => Promise<number>>().mockResolvedValue(2);
+    (h.database as typeof h.database & { $executeRaw: typeof executeRaw }).$executeRaw = executeRaw;
+
+    await new CleanupService(h.database as never, h.storage as never).runDueJobs();
+
+    expect(h.storage.remove).toHaveBeenCalledWith(['rooms/r/objects/expired']);
+    expect(uploadSession.deleteMany).toHaveBeenCalledTimes(1);
+    expect(h.storage.remove.mock.invocationCallOrder[0]).toBeLessThan(
+      uploadSession.deleteMany.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+    );
+    expect(executeRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it('deletes only the abandoned upload version that provider cleanup removed', async () => {
+    const h = harness();
+    h.database.storageCleanupJob.findMany.mockResolvedValue([]);
+    const uploadId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+    const storageKey = 'rooms/r/objects/expired';
+    const uploadSession = {
+      findMany: vi.fn().mockResolvedValue([{ id: uploadId, storageKey }]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    };
+    (h.database as typeof h.database & { uploadSession: typeof uploadSession }).uploadSession =
+      uploadSession;
+    const now = new Date('2026-08-20T10:00:00.000Z');
+
+    await new CleanupService(h.database as never, h.storage as never).runDueJobs(now);
+
+    expect(uploadSession.deleteMany).toHaveBeenCalledWith({
+      where: {
+        OR: [
+          {
+            id: uploadId,
+            storageKey,
+            OR: [
+              { status: { in: ['CANCELLED', 'EXPIRED', 'REJECTED'] } },
+              { status: { in: ['PREPARED', 'UPLOADING'] }, expiresAt: { lte: now } },
+            ],
+          },
+        ],
+      },
+    });
+  });
+
+  it('bounds abandoned upload cleanup work per run', async () => {
+    const h = harness();
+    h.database.storageCleanupJob.findMany.mockResolvedValue([]);
+    const uploadSession = {
+      findMany: vi.fn().mockResolvedValue([]),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+    };
+    (h.database as typeof h.database & { uploadSession: typeof uploadSession }).uploadSession =
+      uploadSession;
+    const now = new Date('2026-08-20T10:00:00.000Z');
+
+    await new CleanupService(h.database as never, h.storage as never).runDueJobs(now);
+
+    expect(uploadSession.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: { updatedAt: 'asc' }, take: 25 }),
+    );
+  });
+
+  it('bounds confirmed tombstone metadata cleanup to the validated subtree', async () => {
+    const h = harness();
+    const executeRaw = vi.fn<(sql: SqlTemplate) => Promise<number>>().mockResolvedValue(2);
+    (h.database as typeof h.database & { $executeRaw: typeof executeRaw }).$executeRaw = executeRaw;
+
+    await new CleanupService(h.database as never, h.storage as never).runDueJobs();
+
+    const sql = executeRaw.mock.calls[0]?.[0]?.strings.join('') ?? '';
+    expect(sql).toContain('parent.depth < ');
+    expect(sql).toContain('NOT child."id" = ANY(parent.path)');
+    expect(sql).toContain('child."dataRoomId" = parent."dataRoomId"');
   });
 });

@@ -20,6 +20,11 @@ interface CleanupDatabase {
     findMany(args: unknown): Promise<readonly CleanupJob[]>;
     updateMany(args: unknown): Promise<{ count: number }>;
   };
+  uploadSession?: {
+    findMany(args: unknown): Promise<readonly { id: string; storageKey: string }[]>;
+    deleteMany(args: unknown): Promise<{ count: number }>;
+  };
+  $executeRaw<T>(query: Prisma.Sql): Promise<T>;
   $queryRaw<T>(query: Prisma.Sql): Promise<T>;
 }
 
@@ -68,7 +73,38 @@ export class CleanupService {
       if (outcome === 'failed') failed += 1;
       if (outcome === 'superseded') superseded += 1;
     }
+    await this.cleanupAbandonedUploads(now);
     return { claimed, succeeded, failed, superseded };
+  }
+
+  private async cleanupAbandonedUploads(now: Date): Promise<void> {
+    const uploads = this.prisma.uploadSession;
+    if (!uploads) return;
+    const abandonedStates = [
+      { status: { in: ['CANCELLED', 'EXPIRED', 'REJECTED'] } },
+      { status: { in: ['PREPARED', 'UPLOADING'] }, expiresAt: { lte: now } },
+    ];
+    const abandoned = await uploads.findMany({
+      where: { OR: abandonedStates },
+      orderBy: { updatedAt: 'asc' },
+      take: MAX_JOBS_PER_RUN,
+      select: { id: true, storageKey: true },
+    });
+    if (abandoned.length === 0) return;
+    try {
+      await this.storage.remove(abandoned.map((upload) => upload.storageKey));
+    } catch {
+      return;
+    }
+    await uploads.deleteMany({
+      where: {
+        OR: abandoned.map((upload) => ({
+          id: upload.id,
+          storageKey: upload.storageKey,
+          OR: abandonedStates,
+        })),
+      },
+    });
   }
 
   private async claim(candidate: CleanupJob, now: Date): Promise<CleanupJob | null> {
@@ -116,6 +152,12 @@ export class CleanupService {
         : 'superseded';
     }
 
+    try {
+      await this.prisma.$executeRaw(confirmedTombstonesUpdate(job.rootNodeId));
+    } catch {
+      return (await this.markRetryable(job, now, 'CLEANUP_MARK_FAILED')) ? 'failed' : 'superseded';
+    }
+
     const result = await this.prisma.storageCleanupJob.updateMany({
       where: { id: job.id, status: 'RUNNING', attempts: job.attempts },
       data: { status: 'SUCCEEDED', lastErrorCode: null, updatedAt: now },
@@ -135,6 +177,29 @@ export class CleanupService {
     });
     return result.count === 1;
   }
+}
+
+function confirmedTombstonesUpdate(rootNodeId: string): Prisma.Sql {
+  return Prisma.sql`
+    WITH RECURSIVE subtree AS (
+      SELECT node."id", node."dataRoomId",
+             0 AS depth, ARRAY[node."id"]::uuid[] AS path
+      FROM "Node" node
+      WHERE node."id" = ${rootNodeId}::uuid
+        AND node."deletedAt" IS NOT NULL
+      UNION ALL
+      SELECT child."id", child."dataRoomId",
+             parent.depth + 1, parent.path || child."id"
+      FROM "Node" child
+      JOIN subtree parent ON child."parentId" = parent."id"
+      WHERE child."deletedAt" IS NOT NULL
+        AND child."dataRoomId" = parent."dataRoomId"
+        AND parent.depth < ${MAX_SUBTREE_DEPTH}
+        AND NOT child."id" = ANY(parent.path)
+    )
+    UPDATE "Node" SET "storageKey" = NULL, "sizeBytes" = 0
+    WHERE "id" IN (SELECT "id" FROM subtree)
+  `;
 }
 
 export function retryDelayMs(attempts: number): number {
