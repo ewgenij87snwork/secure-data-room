@@ -9,15 +9,15 @@
 
 **[Open the live demo](https://secure-data-room-web.vercel.app)** · [Check API health](https://secure-data-room-api.vercel.app/v1/health/ready) · [View source](https://github.com/ewgenij87snwork/secure-data-room)
 
-**Watch the 51-second product walkthrough in 1080p on [YouTube](https://youtu.be/vBdRxaqFBLs) →**
+**Watch the product walkthrough on [YouTube](https://youtu.be/vBdRxaqFBLs) →**
 
 <p align="center">
   <img src="assets/readme/secure-data-room-demo.gif" alt="Secure Data Room reviewer tour: private workspace, multi-PDF upload, scoped sharing, and PDF review" width="900">
 </p>
 
-The live Web and API expose their deployment commit identities. Use the release identity check below to confirm that both services match the submitted commit after deployment.
+The live Web and API expose their deployment commit identities. Use the release identity check below to confirm that both services match the selected commit after deployment.
 
-## A two-minute reviewer tour
+## Reviewer tour
 
 1. Sign in with Google; the application creates a private default Data Room.
 2. Create a folder and upload multiple PDFs with independent progress and validation.
@@ -86,7 +86,7 @@ Source of truth: [`prisma/schema.prisma`](prisma/schema.prisma).
 - Public sharing is read-only and scoped to the selected subtree. Revocation blocks new access; an already-issued signed PDF URL has a disclosed maximum residual TTL of 60 seconds.
 - Every file view exposes a direct download fallback when the browser cannot embed the PDF.
 - PostgreSQL RLS, quotas, runtime kill switches, tombstones, and an idempotent storage cleanup job provide defense in depth.
-- This is a take-home MVP, not a compliance certification. Malware scanning, immutable audit logging, retention/backups, enterprise identity, WAF policy, and incident response remain outside this submission.
+- This is an independent MVP, not a compliance certification. Malware scanning, immutable audit logging, retention/backups, enterprise identity, WAF policy, and incident response remain outside its scope.
 
 ## Scale decisions
 
@@ -149,18 +149,18 @@ certifying a release.
 
 ## Deliberate trade-offs
 
-- One default room per owner keeps the deadline model small; multiple rooms would need an explicit default-room choice.
+- One default room per owner keeps the initial product model small; multiple rooms would need an explicit default-room choice.
 - Tombstones and cleanup-job records are the recoverable deadline-build boundary; production needs a reviewed retention and purge policy.
-- Search and file versioning are optional assignment extras and intentionally excluded from this MVP.
+- Search and file versioning are intentionally excluded from this MVP.
 - Codex helped with requirement extraction, implementation, adversarial review, traceability, and documentation. Playwright defines the 11 deployed production journeys used for release certification. Remotion and FFmpeg assembled the deterministic reviewer tour from anonymized captures. The engineer selected the scope, inspected the implementation, made the security decisions, and owns every accepted change; AI output is not treated as evidence.
 
 ## Creator
 
-Built and submitted by **Yevgeniy Sorokin**.
+Built by **Yevgeniy Sorokin** as an independent technical project.
 
 <a href="https://github.com/ewgenij87snwork" aria-label="Yevgeniy Sorokin on GitHub"><img src="https://img.shields.io/badge/GitHub-ewgenij87snwork-111827?logo=github&logoColor=white" alt="GitHub: ewgenij87snwork"></a>
 <a href="https://www.linkedin.com/in/yevgeniy-sorokin-829b7b18a/" aria-label="Yevgeniy Sorokin on LinkedIn"><img src="https://img.shields.io/badge/LinkedIn-Yevgeniy%20Sorokin-0A66C2?logo=linkedin&logoColor=white" alt="LinkedIn: Yevgeniy Sorokin"></a>
 
 ## License
 
-No public reuse license is granted until the take-home owner confirms that publication is permitted.
+This is Yevgeniy Sorokin's original independent work. He authorizes public presentation of the project, repository, and demo in his CV, portfolio, and professional profiles. This permission does not grant third-party reuse rights. No public reuse license is granted.
