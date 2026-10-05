@@ -21,4 +21,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl             --fail             --show-error             --silent             --max-time 30             --retry 3             --retry-delay 10             --retry-all-errors             https://secure-data-room-api.vercel.app/v1/health/ready
+          curl_args=(
+            --fail
+            --show-error
+            --silent
+            --max-time 30
+            --retry 3
+            --retry-delay 10
+            --retry-all-errors
+          )
+          url="https://secure-data-room-api.vercel.app/v1/health/ready"
+          curl "${curl_args[@]}" "$url"
