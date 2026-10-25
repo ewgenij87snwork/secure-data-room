@@ -15,7 +15,7 @@ async function checkHealth(controller) {
       url.searchParams.set('_keepalive', `${Date.now()}-${attempt}`);
       const response = await fetch(url, {
         method: 'GET',
-        redirect: 'error',
+        redirect: 'manual',
         cache: 'no-store',
         headers: {
           accept: 'application/json',

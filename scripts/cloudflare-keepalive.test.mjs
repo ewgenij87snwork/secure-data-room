@@ -68,7 +68,7 @@ test('successful probe bypasses caches and records build identity', async () => 
   await h.run();
   assert.equal(h.calls.length, 1);
   assert.equal(h.calls[0].init.cache, 'no-store');
-  assert.equal(h.calls[0].init.redirect, 'error');
+  assert.equal(h.calls[0].init.redirect, 'manual');
   assert.ok(new URL(h.calls[0].url).searchParams.has('_keepalive'));
   assert.equal(h.logs[0].result, 'success');
   assert.equal(h.logs[0].build.length, 40);
@@ -134,3 +134,14 @@ test(
     }
   },
 );
+
+test('redirects fail closed and never change the target origin', async () => {
+  const h = harness([
+    response({}, 302, { location: 'https://example.invalid/redirect' }),
+    response(),
+  ]);
+  await h.run();
+  assert.equal(h.calls[0].init.redirect, 'manual');
+  assert.equal(h.logs[0].errorCode, 'HTTP_302');
+  assert.equal(h.logs.at(-1).result, 'success');
+});
