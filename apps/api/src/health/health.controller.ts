@@ -26,7 +26,8 @@ export class HealthController {
   @ApiServiceUnavailableResponse({ description: 'The database readiness probe failed.' })
   async getReady(): Promise<HealthResponse> {
     try {
-      await this.prisma.$queryRaw`SELECT 1`;
+      // Exercise the application schema as well as the database connection.
+      await this.prisma.userProfile.findFirst({ select: { id: true } });
       return this.getLive();
     } catch {
       throw new ServiceUnavailableException({
