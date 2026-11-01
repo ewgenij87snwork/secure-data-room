@@ -11,11 +11,14 @@ vi.stubEnv('GIT_COMMIT_SHA', 'abc1234');
 
 const { HealthController } = await import('./health.controller.js');
 
-function createController(queryResult: unknown = null): HealthControllerInstance {
+type ControllerWithMock = HealthControllerInstance & { findFirst: ReturnType<typeof vi.fn> };
+
+function createController(queryResult: unknown = null): ControllerWithMock {
+  const findFirst = vi.fn().mockResolvedValue(queryResult);
   const prisma = {
-    userProfile: { findFirst: vi.fn().mockResolvedValue(queryResult) },
+    userProfile: { findFirst },
   } as unknown as PrismaService;
-  return new HealthController(prisma);
+  return Object.assign(new HealthController(prisma), { findFirst });
 }
 
 describe('HealthController', () => {
@@ -34,8 +37,7 @@ describe('HealthController', () => {
       version: 'test-version',
       commit: 'abc1234',
     });
-    expect((controller as unknown as { prisma: PrismaService }).prisma.userProfile.findFirst)
-      .toHaveBeenCalledWith({ select: { id: true } });
+    expect(controller.findFirst).toHaveBeenCalledWith({ select: { id: true } });
   });
 
   it('fails closed without leaking the database error', async () => {
